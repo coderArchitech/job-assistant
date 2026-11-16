@@ -26,9 +26,10 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 ## M0. Project setup
 
-- [ ] **T0.01 Create the Android project** (P0)
+- [x] **T0.01 Create the Android project** (P0)
   Single-activity Kotlin app, Jetpack Compose with Material 3, `minSdk 29`, `targetSdk 36`, package name decided.
   _Done when:_ the empty app launches on an API 29 and an API 36 emulator.
+  _Done in [#4](https://github.com/coderArchitech/job-assistant/pull/4). Verified by `MainActivityTest` in CI on Android 10 (API 29), 14 and 16 (API 36) emulators._
 
 - [x] **T0.02 Set up the Gradle module structure** (P0) · Depends on T0.01
   Create the modules from the design: `:app`, `:core:ui`, `:core:model`, `:core:data`, `:core:security`, `:core:network`, `:core:config`, `:ai`, `:sources`, `:portals`, `:otp`, `:email`, `:agent`, `:work` and the `:feature:*` modules. Add a version catalog (`libs.versions.toml`) and convention plugins in `build-logic/`.
@@ -48,6 +49,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 - [ ] **T0.05 Set up CI** (P0) · Depends on T0.04
   GitHub Actions: lint, unit tests, a release build with R8, and instrumented tests on emulators at API 29, 34 and 36.
   _Done when:_ a PR shows all checks, and a failing test blocks merging.
+  _Workflows added in [#4](https://github.com/coderArchitech/job-assistant/pull/4) and all checks run on PRs. Still open: make the checks required in branch protection (T0.08) so a failing test blocks merging._
 
 - [ ] **T0.06 Define build types and flavors** (P0) · Depends on T0.01
   `debug` and `release` build types; `dev` and `prod` flavors (dev points at a test config host). HTTP logging only in debug.
