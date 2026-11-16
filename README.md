@@ -152,3 +152,4 @@ Estimated 14 weeks for two Android developers (planning assumption):
 
 - [Product Requirements Document — Phase 1](docs/PRD.md): goals, user stories, functional and non-functional requirements, risks, acceptance criteria and open questions.
 - [Technical Design — Phase 1](docs/TECHNICAL_DESIGN.md): architecture, modules, pipeline and scheduling, data model, AI provider layer, job sources, portal automation, OTP, outreach, security, Android platform constraints, testing and delivery plan.
+- [Implementation tasks](TASK.md): every task needed to build Phase 1, grouped by milestone, with dependencies and done-when checks.
