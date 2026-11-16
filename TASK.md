@@ -95,7 +95,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   Repository methods that move a job between statuses in one transaction, with the expected current status as a precondition (`UPDATE … WHERE status = ?`).
   _Done when:_ a test shows two concurrent transitions of the same job cannot both succeed.
 
-- [ ] **T1.06 Add settings storage** (P0) · Depends on T0.02
+- [x] **T1.06 Add settings storage** (P0) · Depends on T0.02 · [#10](https://github.com/coderArchitech/job-assistant/pull/10)
   Proto DataStore for thresholds, schedule, caps, selected models and feature toggles.
   _Done when:_ settings survive an app restart and have tested defaults.
 
@@ -107,10 +107,12 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 - [ ] **T1.08 Configure backup exclusions** (P0) · Depends on T1.07
   `dataExtractionRules` (API 31+) and `fullBackupContent` (API 29–30) exclude `vault.pb`, `app_webview/` and `files/proofs/`.
+  _Note from T1.06:_ Decide whether `settings.pb` is backed up (D03); if it is, reset `autoSendEmails` to false after a restore. Exclude `datastore/vault.pb` by exact path, never the whole `datastore/` directory.
   _Done when:_ a `bmgr` backup and restore on both API levels contains no vault, cookies or proofs.
 
 - [ ] **T1.09 Add log redaction** (P0) · Depends on T0.02
   A logging tree that strips vault values, API keys, `Authorization`, `x-api-key` and `Cookie` headers. No request bodies logged in release.
+  _Note from T1.06:_ Log, redacted, when `settings.pb` is reset after corruption or a stored settings value falls back to its default (T1.06).
   _Done when:_ a test logs a known secret and finds it redacted in the output.
 
 ### Networking and AI
@@ -133,6 +135,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 - [ ] **T1.14 Add usage metering and the budget guard** (P0) · Depends on T1.03, T1.11
   Write a `UsageRecord` for every call, priced from the price table. Before each call, refuse it if month-to-date spend plus a worst-case estimate would exceed the cap; then pause the agent and show the reason on Home.
+  _Note from T1.06:_ Fail closed: if `SettingsRepository.settings` fails (it does after repeated I/O errors), pause AI calls rather than assume a budget.
   _Done when:_ a test with a $1 cap refuses the call that would cross it.
 
 - [ ] **T1.15 Add the prompt guard** (P0) · Depends on T1.07, T1.11
