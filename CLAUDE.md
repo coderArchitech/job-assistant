@@ -18,7 +18,18 @@ These three files are the source of truth. When code and docs disagree, either f
 2. Check the task's **Depends on** list first. If a dependency is not ticked, stop and say so instead of building around it.
 3. Check the **Open decisions** table. If the task is blocked by an undecided `Dxx`, ask before choosing.
 4. A task is done only when its **Done when** check passes. Then tick it in `TASK.md` in the same PR and link the PR.
-5. Use `/implement-task <ID>` to follow this flow.
+5. Every task runs through `/implement-task <ID>`, even when the request is only "continue with T1.07" or "next task". That skill makes these steps mandatory: write (`android-dev`), test (`test-writer`, then `/run-tests`), review (`/code-review`, plus `security-reviewer` for sensitive changes), docs (`/update-docs`), then PR and CI.
+
+### Automation that runs by itself
+
+Project hooks in `.claude/settings.json` run without anyone asking:
+
+| When | What runs | On failure |
+| --- | --- | --- |
+| After every Edit or Write | `scripts/hooks/after_edit.sh`: the safety rules on the changed file | Findings go back to Claude to fix at once |
+| Before every `git push` | `scripts/hooks/pre_push.sh`: safety rules, `TASK.md` and docs checks, plus `./gradlew unitTest staticChecks` when code or build files changed | The push is blocked |
+
+People get the same pre-push check with `git config core.hooksPath .githooks`. Set `JOBASSISTANT_SKIP_PREPUSH=1` only in an emergency; CI runs the same checks anyway.
 
 ## Stack
 

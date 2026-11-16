@@ -45,9 +45,11 @@ def tracked_files() -> list[str]:
     return [f for f in out.splitlines() if f]
 
 
-def main() -> int:
+def main(argv: list[str]) -> int:
+    # With paths (the Claude Code edit hook), check only those files; otherwise every tracked file.
+    paths = [str(Path(a).resolve().relative_to(Path.cwd().resolve())) for a in argv] if argv else tracked_files()
     failures = []
-    for path in tracked_files():
+    for path in paths:
         if path.startswith(SKIP_PREFIXES) or Path(path).suffix.lower() in SKIP_SUFFIXES:
             continue
         try:
@@ -73,4 +75,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
