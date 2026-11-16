@@ -10,12 +10,21 @@ import java.nio.charset.CodingErrorAction
  * [toString] never shows the value, so a `Secret` that ends up in a log or a string template
  * prints as `Secret(****)`. Call [reveal] only where the plaintext is really needed, and never log
  * or prompt with the result. Two secrets are equal when their values are equal; the comparison
- * takes the same time wherever the values differ.
+ * takes the same time wherever the values differ. The value must be valid UTF-16 text (no lone
+ * surrogate), so it can always be stored; invalid text is rejected here with
+ * [IllegalArgumentException] rather than failing later inside the vault.
  */
 class Secret(
     value: CharSequence,
 ) {
     private val chars = CharArray(value.length) { value[it] }
+
+    init {
+        if (!isWellFormed(chars)) {
+            chars.fill('\u0000')
+            throw IllegalArgumentException("A secret must be valid text (it has a lone surrogate)")
+        }
+    }
 
     /** Number of characters in the secret. */
     val length: Int get() = chars.size
@@ -55,6 +64,20 @@ class Secret(
     override fun hashCode(): Int = 0
 
     internal companion object {
+        /** True when every surrogate in [chars] is part of a high-low pair. */
+        private fun isWellFormed(chars: CharArray): Boolean {
+            var i = 0
+            while (i < chars.size) {
+                val c = chars[i]
+                when {
+                    c.isHighSurrogate() && i + 1 < chars.size && chars[i + 1].isLowSurrogate() -> i += 2
+                    c.isSurrogate() -> return false
+                    else -> i++
+                }
+            }
+            return true
+        }
+
         /** Decodes UTF-8 [bytes] into a secret without creating an intermediate String. */
         fun fromUtf8(bytes: ByteArray): Secret {
             val decoded =
