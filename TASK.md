@@ -78,9 +78,10 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 ### Core data and settings
 
-- [ ] **T1.02 Define the domain model** (P0) · Depends on T0.02
+- [x] **T1.02 Define the domain model** (P0) · Depends on T0.02
   Pure Kotlin types in `:core:model` for every entity in the design (`Profile`, `SearchPreset`, `Portal`, `Job`, `MatchResult`, `Draft`, `Decision`, `Application`, `OutreachMessage`, `Run`, `SourceCursor`, `UsageRecord`, `DailyReport`, `CompanyWatchlist`) and the status enums.
   _Done when:_ the types compile with no Android dependency.
+  _Done in [#8](https://github.com/coderArchitech/job-assistant/pull/8). `:core:model` compiles as a Kotlin JVM module whose classpath holds only kotlin-stdlib, kotlinx-serialization-core and javax.inject; 12 unit tests cover validation, tiers, statuses and JSON round trips._
 
 - [ ] **T1.03 Create the Room database** (P0) · Depends on T1.02
   Entities, DAOs, JSON type converters, unique constraints (`Job` on source + externalId, `Application` on jobId), indexes on `dedupeHash` and `status`, and an exported schema.
