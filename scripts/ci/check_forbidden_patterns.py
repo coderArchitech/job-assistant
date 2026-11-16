@@ -29,6 +29,8 @@ RULES: list[tuple[str, re.Pattern[str], re.Pattern[str] | None, str]] = [
      "Cleartext traffic is not allowed (design: Security and privacy)."),
     ("linkedin-host", re.compile(r"linkedin\.com", re.IGNORECASE), re.compile(r"(^|/)portals/"),
      "LinkedIn is never automated; LinkedIn hosts must not appear in the portal runtime (CLAUDE.md rule 7)."),
+    ("force-unwrap", re.compile(r"[\w)\]]!!(?!=)"), re.compile(r"/src/main/.*\.kts?$"),
+     "No `!!` in production code; use safe calls, requireNotNull with a message, or a sealed result (CLAUDE.md)."),
     ("http-body-logging", re.compile(r"HttpLoggingInterceptor\.Level\.BODY"), re.compile(r"^(?!.*/src/debug/)"),
      "Request body logging is only allowed in debug source sets (CLAUDE.md rule 2)."),
 ]

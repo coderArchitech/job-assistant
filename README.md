@@ -148,6 +148,18 @@ Five milestones, built in order. [TASK.md](TASK.md) breaks each one into tasks.
 - Accounts on the job portals you want to automate (optional)
 - A Google account for Gmail outreach (optional)
 
+## Building
+
+Needs JDK 21 and the Android SDK (`ANDROID_HOME`, or `sdk.dir` in `local.properties`).
+
+```bash
+./gradlew assembleDevDebug   # dev build, installs next to prod as com.coderarchitech.jobassistant.dev
+./gradlew unitTest           # JVM unit tests
+./gradlew staticChecks       # Android Lint, detekt and ktlint
+```
+
+See [CLAUDE.md](CLAUDE.md) for all commands and the checks every PR must pass.
+
 ## Documentation
 
 - [Product Requirements Document — Phase 1](docs/PRD.md): goals, user stories, functional and non-functional requirements, risks, acceptance criteria and open questions.

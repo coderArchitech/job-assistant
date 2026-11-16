@@ -22,6 +22,8 @@ coroutines = "1.10.2"
 hilt = "2.60.1"
 junit4 = "4.13.2"
 robolectric = "4.18"
+# Android runtime jar Robolectric 4.18 uses for SDK 36; fetched by Gradle so tests run offline.
+robolectric-android-all = "16-robolectric-13921718-2-i7"
 
 # Static analysis
 detekt = "1.23.8"
@@ -55,6 +57,7 @@ kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-c
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 junit4 = { module = "junit:junit", version.ref = "junit4" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+robolectric-android-all = { module = "org.robolectric:android-all-instrumented", version.ref = "robolectric-android-all" }
 
 # Gradle plugins used by build-logic
 android-gradlePlugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }

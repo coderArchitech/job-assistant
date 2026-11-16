@@ -4,6 +4,9 @@ plugins {
     id("jobassistant.android.hilt")
 }
 
+/** Config host URL for a flavor from gradle.properties, quoted for `buildConfigField`. */
+fun configHost(flavor: String): String = "\"${providers.gradleProperty("jobassistant.configHost.$flavor").get()}\""
+
 android {
     defaultConfig {
         applicationId = "com.coderarchitech.jobassistant"
@@ -33,11 +36,11 @@ android {
             dimension = "environment"
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
-            buildConfigField("String", "CONFIG_HOST", "\"${providers.gradleProperty("jobassistant.configHost.dev").get()}\"")
+            buildConfigField("String", "CONFIG_HOST", configHost("dev"))
         }
         create("prod") {
             dimension = "environment"
-            buildConfigField("String", "CONFIG_HOST", "\"${providers.gradleProperty("jobassistant.configHost.prod").get()}\"")
+            buildConfigField("String", "CONFIG_HOST", configHost("prod"))
         }
     }
 }
@@ -70,6 +73,28 @@ dependencies {
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.compose.ui.test.junit4)
+}
+
+// Robolectric's own downloader gives up on HTTP 429 from Maven Central. Gradle fetches the
+// Android runtime jar instead (with retries and caching), and Robolectric runs offline from it.
+val robolectricRuntime by configurations.creating {
+    isTransitive = false
+}
+
+dependencies {
+    robolectricRuntime(libs.robolectric.android.all)
+}
+
+val robolectricJars = layout.buildDirectory.dir("robolectric-jars")
+val syncRobolectricJars by tasks.registering(Sync::class) {
+    from(robolectricRuntime)
+    into(robolectricJars)
+}
+
+tasks.withType<Test>().configureEach {
+    dependsOn(syncRobolectricJars)
+    systemProperty("robolectric.offline", "true")
+    systemProperty("robolectric.dependency.dir", robolectricJars.get().asFile.absolutePath)
 }
 
 tasks.register("unitTest") {

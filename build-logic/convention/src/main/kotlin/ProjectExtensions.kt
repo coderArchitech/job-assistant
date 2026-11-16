@@ -45,6 +45,8 @@ internal fun Lint.configureStrictLint() {
             "AndroidGradlePluginVersion",
             // targetSdk 36 is the Play requirement chosen in the design, not an oversight.
             "OldTargetApi",
+            // A library's bundled lint checks were built for an older lint API; lint skips them.
+            "ObsoleteLintCustomCheck",
         )
 }
 

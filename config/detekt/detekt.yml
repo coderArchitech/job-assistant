@@ -7,11 +7,13 @@ naming:
     # Composable functions are PascalCase by convention.
     ignoreAnnotated: ['Composable']
 
+# `!!` outside tests is caught by scripts/ci/check_forbidden_patterns.py (rule force-unwrap),
+# because detekt's rule for it needs type resolution.
+
 style:
-  # Force-unwrap is not allowed outside tests (CLAUDE.md).
-  UnsafeCallOnNullableType:
-    active: true
-    excludes: ['**/test/**', '**/androidTest/**']
+  UnusedPrivateMember:
+    # Compose previews are private and only used by the IDE.
+    ignoreAnnotated: ['Preview']
   MagicNumber:
     ignorePropertyDeclaration: true
     ignoreCompanionObjectPropertyDeclaration: true
