@@ -39,7 +39,7 @@ jobs:
     env:
       GITLEAKS_VERSION: 8.21.2
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Install gitleaks
@@ -66,8 +66,8 @@ jobs:
     name: Safety rules (CLAUDE.md)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: python3 scripts/ci/check_forbidden_patterns.py
@@ -76,8 +76,8 @@ jobs:
     name: TASK.md consistency
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: python3 scripts/ci/check_task_md.py
@@ -86,13 +86,13 @@ jobs:
     name: Docs links and formatting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Relative links and anchors
         run: python3 scripts/ci/check_md_links.py
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
       - name: Markdown lint
