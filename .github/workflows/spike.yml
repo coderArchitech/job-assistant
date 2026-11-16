@@ -27,8 +27,8 @@ jobs:
           distribution: temurin
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v5
-      - name: Build the shrunk app and test APKs
-        run: ./gradlew -Pspike=${{ matrix.variant }} -PspikeDevice=true :app:assembleDevSpike :app:assembleDevSpikeAndroidTest
+      - name: Build the shrunk app
+        run: ./gradlew -Pspike=${{ matrix.variant }} :app:assembleDevSpike
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -44,7 +44,8 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
             adb install -r app/build/outputs/apk/dev/spike/app-dev-spike.apk
-            adb install -r app/build/outputs/apk/androidTest/dev/spike/app-dev-spike-androidTest.apk
-            adb shell am instrument -w -r -e class com.coderarchitech.jobassistant.spike.SdkSpikeDeviceTest com.coderarchitech.jobassistant.dev.test/androidx.test.runner.AndroidJUnitRunner > spike-result.txt; cat spike-result.txt
-            grep "SPIKE=" spike-result.txt || true
-            grep -q "INSTRUMENTATION_CODE: -1" spike-result.txt && ! grep -q "FAILURES" spike-result.txt
+            adb logcat -c
+            adb shell am start -W -n com.coderarchitech.jobassistant.dev/com.coderarchitech.jobassistant.MainActivity --ez spike true
+            sleep 30
+            adb logcat -d -s SPIKE:* AndroidRuntime:E > spike-result.txt; cat spike-result.txt
+            grep -q "result=PASS" spike-result.txt

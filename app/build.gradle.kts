@@ -161,16 +161,11 @@ android {
             initWith(getByName("release"))
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += "release"
-            // Debuggable so the test APK can instrument it; R8 still shrinks with the release rules.
-            isDebuggable = true
         }
     }
-    // The on-device run tests the R8-shrunk build; JVM tests stay on debug.
-    if (providers.gradleProperty("spikeDevice").isPresent) testBuildType = "spike"
     sourceSets {
-        getByName("main").kotlin.srcDirs("src/spike-$spikeVariant/kotlin", "src/spikeShared/kotlin")
-        getByName("test").kotlin.srcDirs("src/spikeHarness/kotlin", "src/spikeTest/kotlin")
-        getByName("androidTest").kotlin.srcDirs("src/spikeHarness/kotlin", "src/spikeAndroidTest/kotlin")
+        getByName("main").kotlin.srcDirs("src/spike-$spikeVariant/kotlin", "src/spikeShared/kotlin", "src/spikeRunner/kotlin")
+        getByName("test").kotlin.srcDirs("src/spikeTest/kotlin")
     }
 }
 
@@ -184,6 +179,6 @@ dependencies {
     }
     // Every variant uses the same OkHttp, as the app will.
     implementation("com.squareup.okhttp3:okhttp:5.3.2")
-    testImplementation("com.squareup.okhttp3:mockwebserver3:5.3.2")
-    androidTestImplementation("com.squareup.okhttp3:mockwebserver3:5.3.2")
+    // The on-device run starts the mock server inside the app itself (spike only).
+    implementation("com.squareup.okhttp3:mockwebserver3:5.3.2")
 }
