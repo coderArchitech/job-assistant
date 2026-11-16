@@ -14,7 +14,7 @@ These three files are the source of truth. When code and docs disagree, either f
 
 ## Working on a task
 
-1. Every change maps to a task ID in `TASK.md` (for example `T1.07`). Put the ID in the branch name, the commit subject and the PR title.
+1. Every change maps to a task ID in `TASK.md` (for example `T1.07`). Put the ID in the branch name, the commit subject and the PR title. Changes with no task (docs, chores, CI) start the PR title with a type instead: `docs:`, `chore:`, `ci:`, `build:`, `test:` or `fix:`.
 2. Check the task's **Depends on** list first. If a dependency is not ticked, stop and say so instead of building around it.
 3. Check the **Open decisions** table. If the task is blocked by an undecided `Dxx`, ask before choosing.
 4. A task is done only when its **Done when** check passes. Then tick it in `TASK.md` in the same PR and link the PR.
@@ -74,6 +74,20 @@ These come from the PRD and design. A PR that breaks one is not mergeable.
 8. **The generic browser agent never clicks the final submit** in Phase 1.
 9. **Respect caps and the budget.** Every apply takes a cap slot; every AI call passes the budget guard first.
 10. **No `READ_SMS`, no Accessibility API.** OTPs come only through the SMS User Consent API.
+
+## Checks on every PR
+
+`.github/workflows/pr-checks.yml` runs these; all must pass before merging.
+
+| Check | Script or tool | Fix locally with |
+| --- | --- | --- |
+| PR title has a task ID | Regex in the workflow | Rename the PR (`T1.07: ...` or `docs: ...`) |
+| Secret scan | gitleaks on the PR's commits | Remove the secret, rotate it, and rewrite the commit before merging |
+| Safety rules | `scripts/ci/check_forbidden_patterns.py` | `python3 scripts/ci/check_forbidden_patterns.py` |
+| `TASK.md` consistency | `scripts/ci/check_task_md.py` | `python3 scripts/ci/check_task_md.py` |
+| Docs links and formatting | `scripts/ci/check_md_links.py`, markdownlint | `python3 scripts/ci/check_md_links.py` and `npx markdownlint-cli2@0.17.2 --fix` |
+
+A safety-rule match that is intentional (for example the LinkedIn host blocklist) needs `// ci-allow: <rule-id> (reason)` on that line, and a reviewer must agree with the reason. Android build, lint and test checks are added in task T0.05.
 
 ## Kotlin conventions
 

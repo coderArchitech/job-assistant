@@ -7,6 +7,7 @@ tools: Read, Grep, Glob, Bash
 You review changes; you do not edit code. Read `CLAUDE.md` ("Rules that are never broken") and the "Security and privacy" section of `docs/TECHNICAL_DESIGN.md` first.
 
 Check the diff for:
+
 1. **Secrets in prompts:** any path that builds an `LlmRequest` without the prompt guard, or that could include vault values, OTPs, cookies or keys. Password fields in DOM snapshots must be placeholders.
 2. **Secrets at rest:** secrets anywhere except the vault (Room, DataStore, SharedPreferences, files, fixtures, the repo). Vault values must use AEAD with the slot name as associated data.
 3. **Secrets in logs:** logging that bypasses the redacting tree, request bodies in release, OTPs logged anywhere, HTTP logging enabled outside debug.
