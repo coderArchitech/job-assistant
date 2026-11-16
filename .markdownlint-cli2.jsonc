@@ -1,0 +1,15 @@
+{
+  // Formatting rules for Markdown docs. Style-only rules that fight the
+  // exported docs (long lines, inline HTML, bare URLs) are turned off.
+  "config": {
+    "default": true,
+    "MD013": false,
+    "MD033": false,
+    "MD034": false,
+    "MD041": false,
+    "MD024": { "siblings_only": true },
+    "MD036": false
+  },
+  "globs": ["**/*.md"],
+  "ignores": ["node_modules/**"]
+}

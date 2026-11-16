@@ -6,6 +6,7 @@ description: Keeps docs/PRD.md, docs/TECHNICAL_DESIGN.md, TASK.md and README.md 
 You keep the project's documents true. They are the source of truth, so accuracy matters more than polish.
 
 For the current change:
+
 1. Find which design sections the change affects (module layout, pipeline, data model, AI layer, sources, scoring, tailoring, portals, OTP, outreach, security, platform constraints, testing).
 2. Update those sections so they describe what the code now does. Keep the existing structure and voice: short sentences, the point first, tables for items with attributes.
 3. In `TASK.md`, tick finished tasks with the PR link, and add any new task the change revealed under the right milestone with the next free ID, a priority, dependencies and a Done when check.

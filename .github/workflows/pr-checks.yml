@@ -1,0 +1,99 @@
+name: PR checks
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-title:
+    name: PR title has a task ID
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # T1.07: ... | T1.07, T1.08: ... | D04: ... | docs: ... | chore(ci): ...
+          pattern='^((T[0-9]+\.[0-9]{2}|D[0-9]{2})(, (T[0-9]+\.[0-9]{2}|D[0-9]{2}))*|(docs|chore|ci|build|test|fix)(\([a-z0-9-]+\))?): .+'
+          if [[ "$TITLE" =~ $pattern ]]; then
+            echo "Title OK: $TITLE"
+          else
+            echo "::error::PR title must start with a TASK.md ID (\"T1.07: ...\"), a decision ID (\"D04: ...\") or a type (\"docs: ...\", \"chore: ...\", \"ci: ...\", \"build: ...\", \"test: ...\", \"fix: ...\")."
+            echo "Got: $TITLE"
+            exit 1
+          fi
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: 8.21.2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          file="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSLO "$base/$file"
+          curl -sSL "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt" | grep " $file\$" | sha256sum -c -
+          tar -xzf "$file" gitleaks
+          sudo mv gitleaks /usr/local/bin/
+      - name: Scan new commits
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [[ -z "$BASE" || "$BASE" =~ ^0+$ ]] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "No usable base commit; scanning full history."
+            gitleaks git --redact --no-banner --verbose .
+          else
+            gitleaks git --redact --no-banner --verbose --log-opts="$BASE..$HEAD" .
+          fi
+
+  safety-rules:
+    name: Safety rules (CLAUDE.md)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 scripts/ci/check_forbidden_patterns.py
+
+  task-md:
+    name: TASK.md consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 scripts/ci/check_task_md.py
+
+  docs:
+    name: Docs links and formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Relative links and anchors
+        run: python3 scripts/ci/check_md_links.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Markdown lint
+        run: npx --yes markdownlint-cli2@0.17.2

@@ -27,7 +27,7 @@ Job seekers spend hours every day repeating the same work across Naukri, Instahy
 
 ## How it works
 
-```
+```text
 Discover ──► Score ──► Tailor ──► Apply ──► Outreach ──► Report
 ```
 
@@ -42,7 +42,7 @@ Discover ──► Score ──► Tailor ──► Apply ──► Outreach ─
 
 Everything runs on the phone. Only calls to your AI provider, job sites and Gmail leave the device.
 
-```
+```text
 ┌──────────────────────────── Android phone ────────────────────────────┐
 │  App UI (Jetpack Compose)                                              │
 │        │                                                               │
@@ -113,7 +113,7 @@ You accept these risks per portal during onboarding.
 
 ## Proposed project structure
 
-```
+```text
 app/
 ├── ui/              # Compose screens: Home, Jobs, Review, Applications,
 │                    # Outreach, Portals, Report, Settings
