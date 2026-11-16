@@ -175,9 +175,23 @@ interface Embedder {
 | Embeddings | No embeddings endpoint, so the on-device embedder is used | Embeddings API (model chosen in remote config) |
 | Failure handling | Check `stop_reason` before reading content, including `refusal`; never send `temperature` | Check `finish_reason` and refusal fields |
 
-**Client libraries.** The foundation milestone starts with a spike on the official Java SDKs (`com.anthropic:anthropic-java`, `com.openai:openai-java`) on API 29 with R8. If APK size, method count or Android compatibility rule them out, the fallback is a thin Retrofit client over the same REST shapes.
+**Client libraries (decision D01).** Anthropic calls use the official `com.anthropic:anthropic-java` SDK; OpenAI calls use a thin client on OkHttp and kotlinx.serialization. The spike (T1.01, code on [`spike/T1.01-ai-sdks`](https://github.com/coderArchitech/job-assistant/tree/spike/T1.01-ai-sdks)) ran each option inside the R8-shrunk release app against a local mock of both APIs:
 
-**Structured output, not forced tools.** Current Claude models reject forced `tool_choice`, so every task that needs JSON uses the schema-constrained output mode. Each response is still parsed and validated against the Kotlin type; a failure is retried once, then the job is marked `Failed` with the raw text kept for debugging.
+| Option | APK growth after R8 | Methods added | First / warm call, Android 10 | First / warm call, Android 16 | Class-derived schema on device |
+| --- | --- | --- | --- | --- | --- |
+| Thin client (OkHttp 5 + kotlinx.serialization) | +0.3 MB | +1.9k | 380 / 99 ms | 155 / 77 ms | Not applicable |
+| `anthropic-java` 3.3.0 | +2.5 MB | +15.7k | 977 / 86 ms | 926 / 59 ms | Crashes: `NoSuchMethodError` for `AnnotatedType` |
+| `openai-java` 4.94.0 | +15 MB, second dex file | +116k | 1,757 / 86 ms | 927 / 53 ms | Fails: schema validation breaks after R8 renames the class |
+
+Baseline release app: 1.4 MB, 8.5k methods. Both SDKs pass when the JSON Schema is written by hand. The OpenAI SDK's bundled R8 rules keep all of `kotlin.reflect` and large parts of its models, which is where its size comes from; that cost is out of proportion for one provider, so OpenAI gets the thin client. The Anthropic SDK costs 2.5 MB and about 0.6–0.8 s on the first call in a process (Jackson and Kotlin reflection warming up), which background runs absorb; it keeps typed errors, retries and new API features without us re-implementing the wire format.
+
+Rules that follow from the spike:
+
+- Never use the SDKs' class-derived structured output (`outputConfig(Class)`, `responseFormat(Class)`); it depends on `java.lang.reflect.AnnotatedType`, which Android does not have. Each task's output schema is a hand-written JSON Schema, defined once and passed to both providers, and the reply is decoded into the Kotlin type with kotlinx.serialization.
+- `app/proguard-rules.pro` needs `-dontwarn` for `java.lang.reflect.AnnotatedType`, `java.lang.reflect.AnnotatedParameterizedType` and `com.google.auto.value.AutoValue` (referenced through OpenTelemetry) when the Anthropic SDK is added in T1.12; those paths are never executed.
+- Both clients share one OkHttp 5 instance from `:core:network`; the SDK is built on OkHttp 4 and runs on 5 unchanged in the spike.
+
+**Structured output, not forced tools.** Current Claude models reject forced `tool_choice`, so every task that needs JSON uses the schema-constrained output mode with a hand-written JSON Schema (D01). Each response is still parsed and validated against the Kotlin type; a failure is retried once, then the job is marked `Failed` with the raw text kept for debugging.
 
 **Retries.** HTTP 429, 529 and 5xx retry up to 3 times with exponential backoff and jitter, honoring `retry-after`. HTTP 401 marks the key invalid, pauses the agent and notifies. Other 4xx errors fail the call without a retry.
 
@@ -481,7 +495,7 @@ Two tasks have outside lead times and should start early: Gmail OAuth verificati
 
 These need a decision before the milestone named; the PRD's product questions (cloud runner, auto-submit timing, pricing) are not repeated here.
 
-1. **SDKs or thin clients** (start of foundation): do the official Anthropic and OpenAI Java SDKs fit on API 29 with R8, or do we keep our own Retrofit clients?
+1. ~~**SDKs or thin clients**~~ **Decided (D01, T1.01):** official SDK for Anthropic, thin OkHttp client for OpenAI, hand-written JSON schemas for both. See "Client libraries" under AI provider layer.
 2. **Encrypt the database?** (end of foundation): Room holds CTC, notice period and job history but no secrets. SQLCipher adds protection at a cost in APK size and startup time.
 3. **Cloud backup of non-secret data** (end of foundation): back up Room and settings so a new phone keeps history, or disable backup entirely for simplicity?
 4. **Foreground service type** (start of portals and applying): `dataSync` or `specialUse` for the apply session, given Play's declaration review?
