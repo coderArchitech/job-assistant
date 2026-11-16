@@ -13,16 +13,17 @@ Run `git diff --name-only origin/main...HEAD` plus uncommitted changes, and map 
 
 | Changed | Run |
 | --- | --- |
-| Any Kotlin in a module | `./gradlew :<module>:testDevDebugUnitTest` |
-| Any Kotlin | `./gradlew lint detekt ktlintCheck` (scoped to touched modules where possible) |
-| Room entities or schema JSON | `./gradlew :core:data:testDevDebugUnitTest` including migration tests |
-| `:feature:*` or `:core:ui` | Compose UI and screenshot tests for that module |
-| `:portals` Kotlin | `./gradlew :portals:connectedDevDebugAndroidTest` (needs an emulator or device) |
-| `portals/scripts/**` | `npm --prefix portals/scripts test` (Playwright) |
+| Kotlin in a library module | `./gradlew :<module>:unitTest :<module>:staticChecks` |
+| Kotlin in `:app` | `./gradlew :app:unitTest :app:staticChecks` |
+| `build-logic/`, `gradle/` or any `*.gradle.kts` | `./gradlew assembleDevDebug assembleProdRelease unitTest staticChecks` |
+| Room entities or schema JSON | `./gradlew :core:data:unitTest` (includes migration tests) |
+| `:feature:*` or `:core:ui` | That module's `unitTest`; Compose UI and screenshot tests arrive with T5.10 |
+| `:portals` Kotlin | `./gradlew :portals:connectedDebugAndroidTest` (needs an emulator or device) |
+| `portals/scripts/**` | `npm --prefix portals/scripts test` (Playwright; exists from task T3.11) |
 | Prompts or default models | The golden-set script; report tier agreement and cost per job |
-| Gradle or build logic | `./gradlew assembleDevDebug` and the full unit test suite |
+| Docs, `TASK.md` or CI scripts | `python3 scripts/ci/check_md_links.py`, `python3 scripts/ci/check_task_md.py`, `python3 scripts/ci/check_forbidden_patterns.py` |
 
-If the Gradle tasks or npm scripts do not exist yet (before milestone M0 is done), say so and stop. Do not invent commands.
+`unitTest` and `staticChecks` exist in every module, so running them at the root covers everything. If a command named here does not exist yet, say so and stop. Do not invent commands.
 
 ## 3. Instrumented tests
 

@@ -52,7 +52,33 @@ The app is split into Gradle modules along the README's package layout, so the p
 | `:agent` | Pipeline orchestrator, stage use cases, caps policy, budget guard | `:ai`, `:sources`, `:portals`, `:email`, `:otp`, `:core:data` |
 | `:work` | WorkManager workers, schedules, apply foreground service, notifications | `:agent` |
 
-Versions live in one Gradle version catalog (`libs.versions.toml`), and shared build logic sits in convention plugins under `build-logic/`.
+Versions live in one Gradle version catalog (`gradle/libs.versions.toml`), and shared build logic sits in convention plugins under `build-logic/`. Each module's build file only applies a convention plugin and lists its dependencies; namespaces are derived from the Gradle path (`:core:data` becomes `com.coderarchitech.jobassistant.core.data`).
+
+| Convention plugin | Applies to | What it sets up |
+| --- | --- | --- |
+| `jobassistant.android.application` | `:app` | SDK levels, Java 17 bytecode, strict Android Lint, detekt, ktlint |
+| `jobassistant.android.library` | Android modules | The same, plus the `unitTest` and `staticChecks` aggregate tasks |
+| `jobassistant.android.compose` | Modules with UI | Compose compiler, Compose BOM, Material 3 |
+| `jobassistant.android.hilt` | Modules with injection | Hilt with KSP |
+| `jobassistant.android.feature` | `:feature:*` | Library, Compose, Hilt, ViewModel libraries; fails the build if a feature module depends on another |
+| `jobassistant.jvm.library` | `:core:model` | Kotlin JVM only, so Android imports cannot compile there |
+| `jobassistant.static.analysis` | Every module | detekt (`config/detekt/detekt.yml`) and ktlint (`.editorconfig`) |
+
+**Toolchain** (upgrade together and update this table):
+
+| Item | Version or value |
+| --- | --- |
+| Gradle (wrapper, checksum pinned) | 9.8.2 |
+| Android Gradle Plugin | 9.5.0, with its built-in Kotlin support |
+| Kotlin / KSP | 2.4.20 / 2.3.13 |
+| Hilt / Compose BOM | 2.60.1 / 2026.09.00 |
+| JDK to build / bytecode target | 21 / Java 17 |
+| `minSdk` / `targetSdk` / `compileSdk` | 29 / 36 / 37 |
+| Application ID | `com.coderarchitech.jobassistant` (`.dev` suffix for the dev flavor) |
+
+`compileSdk` is 37 because the newest AndroidX libraries require it; `targetSdk` stays at 36, the Play requirement this design targets, so runtime behavior is unchanged. The application ID cannot change after the first Play upload, so confirm it before T0.07.
+
+**Build variants.** Flavors `dev` and `prod` × build types `debug` and `release`. `dev` adds the `.dev` package suffix and `-dev` version suffix, so both install side by side. Release builds run R8 with resource shrinking. `BuildConfig.CONFIG_HOST` comes from `gradle.properties` per flavor (empty until T3.10), and `BuildConfig.HTTP_LOGGING` is true only in debug.
 
 ## Agent pipeline and scheduling
 
@@ -402,7 +428,9 @@ Every external dependency (job APIs, AI providers, portals) is tested against re
 | Acceptance | Manual scripts for BR1–BR6 | The PRD acceptance tests on Android 10, 14 and 16, including one Xiaomi or Samsung device | Each milestone and release |
 | Security | Static scan, manual review | Vault, backup exclusions, log redaction, bridge origin rules | Hardening milestone and before release |
 
-**CI** (GitHub Actions): lint (Android Lint, detekt, ktlint), unit and contract tests, migration tests, a release build with R8, and instrumented tests on emulators at API 29, 34 and 36.
+**CI** (GitHub Actions): lint (Android Lint, detekt, ktlint), unit and contract tests, migration tests, a release build with R8, and instrumented tests on emulators at API 29, 34 and 36. `.github/workflows/android.yml` runs the Android checks on every PR; `.github/workflows/pr-checks.yml` runs the PR title, secret scan, safety-rule, `TASK.md` and docs checks. While the instrumented suite is small it runs on every PR; once it grows, limit it to PRs touching `:portals`, `:core:security` or `:core:data` and run the full matrix nightly.
+
+**Test infrastructure notes.** Robolectric's Android runtime jar is downloaded by Gradle (with retries) and Robolectric runs offline from it, because its own downloader gives up on rate-limit errors from Maven Central. `gradle.properties` also sets longer retry back-off for dependency downloads for the same reason.
 
 **Release**: Play App Signing; internal track for the team, closed testing for the 20-user beta, then production with a staged rollout. Adapter bundles and the price table are released separately on the config host, each with a version and `minAppVersion`, and can be rolled back without an app update.
 

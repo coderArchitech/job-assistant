@@ -22,7 +22,7 @@ These three files are the source of truth. When code and docs disagree, either f
 
 ## Stack
 
-Kotlin, Jetpack Compose with Material 3, single activity, MVVM, Hilt, coroutines and Flow, Room, Proto DataStore, WorkManager, OkHttp and kotlinx.serialization, Google Tink with Android Keystore, Android WebView with JavaScript adapters. `minSdk 29`, `targetSdk 36`.
+Kotlin, Jetpack Compose with Material 3, single activity, MVVM, Hilt, coroutines and Flow, Room, Proto DataStore, WorkManager, OkHttp and kotlinx.serialization, Google Tink with Android Keystore, Android WebView with JavaScript adapters. `minSdk 29`, `targetSdk 36`, `compileSdk 37`. Versions are in `gradle/libs.versions.toml`; the toolchain table is in the design's "Modules" section.
 
 ## Modules
 
@@ -48,15 +48,19 @@ Dependencies point downward only. A `:feature:*` module never depends on another
 
 ## Commands
 
-These are created in milestone M0. Until then, say that a command does not exist yet rather than inventing one.
+Needs JDK 21 and the Android SDK (`ANDROID_HOME`, or `sdk.dir` in an untracked `local.properties`).
 
 ```bash
-./gradlew assembleDevDebug          # build
-./gradlew testDevDebugUnitTest      # unit, contract and Room tests (JVM)
-./gradlew lint detekt ktlintCheck   # static checks
-./gradlew connectedDevDebugAndroidTest   # instrumented tests (needs an emulator or device)
-npm --prefix portals/scripts test   # Playwright tests for JS portal adapters
+./gradlew assembleDevDebug                # build the dev app
+./gradlew unitTest                        # JVM unit tests in every module
+./gradlew staticChecks                    # Android Lint, detekt and ktlint in every module
+./gradlew ktlintFormat                    # fix formatting
+./gradlew connectedDevDebugAndroidTest    # instrumented tests (needs an emulator or device)
 ```
+
+`unitTest` and `staticChecks` are aggregate tasks registered by the convention plugins in `build-logic/`, so they cover a new module automatically. Playwright tests for the portal adapters (`npm --prefix portals/scripts test`) arrive with the adapter framework in task T3.11; until then that command does not exist.
+
+Build variants: flavors `dev` (package suffix `.dev`, so it installs next to prod) and `prod`, each with `debug` and `release` (R8 shrinking). The config host URL per flavor is set in `gradle.properties` and is empty until task T3.10.
 
 Run `/run-tests` to pick the right subset for what changed.
 
@@ -87,7 +91,14 @@ These come from the PRD and design. A PR that breaks one is not mergeable.
 | `TASK.md` consistency | `scripts/ci/check_task_md.py` | `python3 scripts/ci/check_task_md.py` |
 | Docs links and formatting | `scripts/ci/check_md_links.py`, markdownlint | `python3 scripts/ci/check_md_links.py` and `npx markdownlint-cli2@0.17.2 --fix` |
 
-A safety-rule match that is intentional (for example the LinkedIn host blocklist) needs `// ci-allow: <rule-id> (reason)` on that line, and a reviewer must agree with the reason. Android build, lint and test checks are added in task T0.05.
+`.github/workflows/android.yml` adds the Android checks; they must pass too.
+
+| Check | What it runs |
+| --- | --- |
+| Build, static checks and unit tests | All four variants (release with R8), `unitTest`, `staticChecks` |
+| Instrumented tests (API 29, 34, 36) | `connectedDevDebugAndroidTest` on an emulator per API level |
+
+A safety-rule match that is intentional (for example the LinkedIn host blocklist) needs `// ci-allow: <rule-id> (reason)` on that line, and a reviewer must agree with the reason. The safety rules also forbid `!!` in `src/main` code (rule `force-unwrap`), because detekt can only check that with full type analysis.
 
 ## Kotlin conventions
 
