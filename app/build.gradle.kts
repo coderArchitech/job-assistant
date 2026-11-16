@@ -4,6 +4,10 @@ plugins {
     id("jobassistant.android.hilt")
 }
 
+// ---- T1.01 spike (spike branch only): -Pspike=none|anthropic|openai|thin ----
+val spikeVariant = providers.gradleProperty("spike").getOrElse("none")
+if (spikeVariant == "thin") apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
+
 /** Config host URL for a flavor from gradle.properties, quoted for `buildConfigField`. */
 fun configHost(flavor: String): String = "\"${providers.gradleProperty("jobassistant.configHost.$flavor").get()}\""
 
@@ -147,4 +151,39 @@ tasks.register("staticChecks") {
     group = "verification"
     description = "Runs Android Lint, detekt and ktlint for the app module."
     dependsOn("lintDevDebug", "detekt", "ktlintCheck")
+}
+
+// ---- T1.01 spike (spike branch only) ----
+android {
+    buildTypes {
+        getByName("release") { proguardFiles("spike-proguard-rules.pro") }
+        create("spike") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+            // Debuggable so the test APK can instrument it; R8 still shrinks with the release rules.
+            isDebuggable = true
+        }
+    }
+    // The on-device run tests the R8-shrunk build; JVM tests stay on debug.
+    if (providers.gradleProperty("spikeDevice").isPresent) testBuildType = "spike"
+    sourceSets {
+        getByName("main").kotlin.srcDirs("src/spike-$spikeVariant/kotlin", "src/spikeShared/kotlin")
+        getByName("test").kotlin.srcDirs("src/spikeHarness/kotlin", "src/spikeTest/kotlin")
+        getByName("androidTest").kotlin.srcDirs("src/spikeHarness/kotlin", "src/spikeAndroidTest/kotlin")
+    }
+}
+
+dependencies {
+    when (spikeVariant) {
+        "anthropic" -> implementation("com.anthropic:anthropic-java:3.3.0")
+        "openai" -> implementation("com.openai:openai-java:4.94.0")
+        "thin" -> {
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+        }
+    }
+    // Every variant uses the same OkHttp, as the app will.
+    implementation("com.squareup.okhttp3:okhttp:5.3.2")
+    testImplementation("com.squareup.okhttp3:mockwebserver3:5.3.2")
+    androidTestImplementation("com.squareup.okhttp3:mockwebserver3:5.3.2")
 }
