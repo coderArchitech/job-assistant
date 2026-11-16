@@ -5,11 +5,15 @@ import android.security.keystore.KeyProperties
 import android.security.keystore.StrongBoxUnavailableException
 import com.google.crypto.tink.Aead
 import com.google.crypto.tink.integration.android.AndroidKeystore
-import javax.crypto.KeyGenerator
+import java.security.GeneralSecurityException
+import java.security.ProviderException
 
 /**
  * The key that wraps the vault's Tink keyset. Tests substitute a plain Tink AEAD; the app uses
  * [AndroidKeystoreKeyEncryptionKey]. Every call may block, so call it off the main thread.
+ *
+ * Calls, and the returned AEAD, throw [java.security.GeneralSecurityException] or
+ * [java.security.ProviderException]; [TinkVault] tells transient Keystore faults from lost keys.
  */
 internal interface KeyEncryptionKey {
     /** An AEAD over the existing key, or null when there is no key. Never creates one. */
@@ -33,11 +37,26 @@ internal class AndroidKeystoreKeyEncryptionKey(
 ) : KeyEncryptionKey {
     override fun existing(): Aead? = if (AndroidKeystore.hasKey(alias)) AndroidKeystore.getAead(alias) else null
 
+    /**
+     * Tries StrongBox first. Any failure there (no StrongBox, or a StrongBox that reports itself
+     * but fails to generate) falls back once to a regular Keystore key; only a failure of that
+     * second attempt propagates.
+     */
     override fun create(): Aead {
         delete()
-        try {
-            generate(strongBox = true)
-        } catch (_: StrongBoxUnavailableException) {
+        val strongBoxFailed =
+            try {
+                generate(strongBox = true)
+                false
+            } catch (_: StrongBoxUnavailableException) {
+                true
+            } catch (_: ProviderException) {
+                true
+            } catch (_: GeneralSecurityException) {
+                true
+            }
+        if (strongBoxFailed) {
+            deletePartialKey()
             generate(strongBox = false)
         }
         return AndroidKeystore.getAead(alias)
@@ -45,6 +64,20 @@ internal class AndroidKeystoreKeyEncryptionKey(
 
     override fun delete() {
         if (AndroidKeystore.hasKey(alias)) AndroidKeystore.deleteKey(alias)
+    }
+
+    /**
+     * Best-effort removal of whatever a failed StrongBox attempt left under [alias]. Generating
+     * the regular key replaces the alias anyway, so a failure here must not stop the fallback.
+     */
+    private fun deletePartialKey() {
+        try {
+            delete()
+        } catch (_: GeneralSecurityException) {
+            // The next generate() overwrites the alias.
+        } catch (_: ProviderException) {
+            // The next generate() overwrites the alias.
+        }
     }
 
     private fun generate(strongBox: Boolean) {
@@ -58,16 +91,12 @@ internal class AndroidKeystoreKeyEncryptionKey(
                 .setUserAuthenticationRequired(false)
                 .setIsStrongBoxBacked(strongBox)
                 .build()
-        KeyGenerator
-            .getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
-            .apply { init(spec) }
-            .generateKey()
+        AndroidKeystore.generateNewKeyWithSpec(spec)
     }
 
     companion object {
         /** Keystore alias of the vault's key-encryption key. */
         const val DEFAULT_ALIAS = "jobassistant_vault_kek"
-        private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val KEY_SIZE_BITS = 256
     }
 }

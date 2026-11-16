@@ -1,5 +1,6 @@
 package com.coderarchitech.jobassistant.core.security.vault
 
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.coderarchitech.jobassistant.core.model.AiProvider
@@ -20,6 +21,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 import java.security.KeyStore
+import java.security.ProviderException
 
 /** The vault with the real Android Keystore key, under a test-only alias deleted after each test. */
 @RunWith(AndroidJUnit4::class)
@@ -80,7 +82,7 @@ class TinkVaultDeviceTest {
                     VaultSlot.portal(4) to "",
                 )
             val first = open()
-            for ((slot, value) in values) first.vault.put(slot, Secret(value))
+            for ((slot, value) in values) assertEquals(slot.name, VaultPut.Stored, first.vault.put(slot, Secret(value)))
             for ((slot, value) in values) assertEquals(slot.name, found(value), first.vault.get(slot))
             assertTrue(keystoreHasAlias())
             first.close()
@@ -126,7 +128,7 @@ class TinkVaultDeviceTest {
             assertEquals(emptySet<VaultSlot>(), store.vault.slots())
             assertFalse("get does not create a key", keystoreHasAlias())
 
-            store.vault.put(portalB, Secret("fake-password-2"))
+            assertEquals(VaultPut.Stored, store.vault.put(portalB, Secret("fake-password-2")))
             assertTrue(keystoreHasAlias())
             assertEquals(found("fake-password-2"), store.vault.get(portalB))
             store.close()
@@ -141,6 +143,7 @@ class TinkVaultDeviceTest {
         runTest {
             val first = open()
             first.vault.put(portalA, Secret("fake-password-1"))
+            first.vault.put(aiKey, Secret("fake-api-key-not-real"))
             first.close()
 
             kek.delete()
@@ -150,7 +153,10 @@ class TinkVaultDeviceTest {
             assertEquals(VaultRead.Unreadable, second.vault.get(portalA))
             assertFalse("get does not create a key", keystoreHasAlias())
 
-            second.vault.put(portalB, Secret("fake-password-2"))
+            assertEquals(
+                VaultPut.StoredAfterReset(setOf(portalA, aiKey)),
+                second.vault.put(portalB, Secret("fake-password-2")),
+            )
             assertTrue(keystoreHasAlias())
             assertEquals(found("fake-password-2"), second.vault.get(portalB))
             assertEquals(VaultRead.Missing, second.vault.get(portalA))
@@ -161,4 +167,12 @@ class TinkVaultDeviceTest {
             assertEquals(found("fake-password-2"), third.vault.get(portalB))
             third.close()
         }
+
+    @Test
+    fun aPermanentlyInvalidatedKeyIsNeverATransientFailure() {
+        val invalidated = KeyPermanentlyInvalidatedException("fake")
+        assertFalse(invalidated.isTransientKeystoreFailure())
+        assertFalse(ProviderException("fake", invalidated).isTransientKeystoreFailure())
+        assertTrue(ProviderException("fake").isTransientKeystoreFailure())
+    }
 }

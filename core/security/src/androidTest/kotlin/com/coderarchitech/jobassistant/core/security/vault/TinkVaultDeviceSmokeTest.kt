@@ -28,7 +28,7 @@ class TinkVaultDeviceSmokeTest {
             val dataStore = createVaultDataStore(backgroundScope) { tmp.root.resolve("vault.pb") }
             val vault = TinkVault(dataStore, kek, Dispatchers.IO)
 
-            vault.put(VaultSlot.portal(1), Secret("fake-password-1"))
+            assertEquals(VaultPut.Stored, vault.put(VaultSlot.portal(1), Secret("fake-password-1")))
 
             assertEquals(VaultRead.Found(Secret("fake-password-1")), vault.get(VaultSlot.portal(1)))
         }

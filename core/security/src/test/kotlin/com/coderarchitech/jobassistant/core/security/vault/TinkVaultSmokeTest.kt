@@ -24,7 +24,7 @@ class TinkVaultSmokeTest {
         scope.runTest {
             val from = VaultSlot.portal(1)
             val to = VaultSlot.portal(2)
-            vault.put(from, Secret("fake-password-1"))
+            assertEquals(VaultPut.Stored, vault.put(from, Secret("fake-password-1")))
 
             assertEquals(VaultRead.Found(Secret("fake-password-1")), vault.get(from))
             assertEquals(VaultRead.Missing, vault.get(to))

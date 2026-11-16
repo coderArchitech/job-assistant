@@ -16,9 +16,18 @@ internal class FakeKek : KeyEncryptionKey {
     @Volatile var createCount = 0
         private set
 
+    /** When set, [existing] throws it, as a Keystore that cannot be reached would. */
+    @Volatile var existingFailure: Exception? = null
+
+    /** When set, decrypting with the key throws it, as a Keystore cipher operation could. */
+    @Volatile var decryptFailure: Exception? = null
+
     val hasKey: Boolean get() = aead != null
 
-    override fun existing(): Aead? = aead
+    override fun existing(): Aead? {
+        existingFailure?.let { throw it }
+        return aead?.let { FailingAead(it) }
+    }
 
     @Synchronized
     override fun create(): Aead =
@@ -28,9 +37,27 @@ internal class FakeKek : KeyEncryptionKey {
             .also {
                 aead = it
                 createCount++
-            }
+            }.let { FailingAead(it) }
 
     override fun delete() {
         aead = null
+    }
+
+    /** Delegates to [real] unless [decryptFailure] is set. */
+    private inner class FailingAead(
+        private val real: Aead,
+    ) : Aead {
+        override fun encrypt(
+            plaintext: ByteArray,
+            associatedData: ByteArray,
+        ): ByteArray = real.encrypt(plaintext, associatedData)
+
+        override fun decrypt(
+            ciphertext: ByteArray,
+            associatedData: ByteArray,
+        ): ByteArray {
+            decryptFailure?.let { throw it }
+            return real.decrypt(ciphertext, associatedData)
+        }
     }
 }

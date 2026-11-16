@@ -21,6 +21,10 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.security.GeneralSecurityException
+import java.security.KeyStoreException
+import java.security.ProviderException
+import javax.crypto.AEADBadTagException
 
 class TinkVaultTest {
     @get:Rule
@@ -82,8 +86,8 @@ class TinkVaultTest {
     fun putReplacesTheEarlierValue() =
         runTest {
             val store = open()
-            store.vault.put(portalA, Secret("fake-password-1"))
-            store.vault.put(portalA, Secret("fake-password-2"))
+            assertEquals(VaultPut.Stored, store.vault.put(portalA, Secret("fake-password-1")))
+            assertEquals(VaultPut.Stored, store.vault.put(portalA, Secret("fake-password-2")))
             assertEquals(found("fake-password-2"), store.vault.get(portalA))
             assertEquals(setOf(portalA), store.vault.slots())
             store.close()
@@ -212,7 +216,7 @@ class TinkVaultTest {
             assertEquals(found("fake-password-1"), second.vault.get(portalA))
             assertEquals(found("fake-api-key-not-real"), second.vault.get(aiKey))
             assertEquals(setOf(portalA, aiKey), second.vault.slots())
-            second.vault.put(portalB, Secret("fake-password-2"))
+            assertEquals(VaultPut.Stored, second.vault.put(portalB, Secret("fake-password-2")))
             second.close()
 
             val third = open()
@@ -240,7 +244,11 @@ class TinkVaultTest {
                 assertEquals(way, VaultRead.Unreadable, second.vault.get(portalA))
                 assertEquals("$way: slots still listed", setOf(portalA, aiKey), second.vault.slots())
 
-                second.vault.put(portalB, Secret("fake-password-2"))
+                assertEquals(
+                    "$way: put reports what was lost",
+                    VaultPut.StoredAfterReset(setOf(portalA, aiKey)),
+                    second.vault.put(portalB, Secret("fake-password-2")),
+                )
                 assertEquals(way, found("fake-password-2"), second.vault.get(portalB))
                 assertEquals("$way: old values dropped", VaultRead.Missing, second.vault.get(portalA))
                 assertEquals(way, setOf(portalB), second.vault.slots())
@@ -263,7 +271,11 @@ class TinkVaultTest {
             assertFalse("key deleted", kek.hasKey)
             assertEquals(VaultProto.getDefaultInstance(), first.stored())
 
-            first.vault.put(portalB, Secret("fake-password-2"))
+            assertEquals(
+                "a wiped vault loses nothing",
+                VaultPut.Stored,
+                first.vault.put(portalB, Secret("fake-password-2")),
+            )
             assertEquals(found("fake-password-2"), first.vault.get(portalB))
             assertNotEquals(oldKeyset, first.stored().encryptedKeyset)
             assertEquals(2, kek.createCount)
@@ -356,6 +368,177 @@ class TinkVaultTest {
             assertEquals(before, second.stored())
             second.close()
         }
+
+    @Test
+    fun putAfterKeyLossDoesNotListTheSlotItOverwrites() =
+        runTest {
+            val first = open()
+            first.vault.put(portalA, Secret("fake-password-1"))
+            first.vault.put(aiKey, Secret("fake-api-key-not-real"))
+            first.close()
+            kek.delete()
+
+            val second = open()
+            assertEquals(
+                VaultPut.StoredAfterReset(setOf(aiKey)),
+                second.vault.put(portalA, Secret("fake-password-2")),
+            )
+            assertEquals(found("fake-password-2"), second.vault.get(portalA))
+            assertEquals(setOf(portalA), second.vault.slots())
+            second.close()
+        }
+
+    @Test
+    fun putAfterKeyLossWithNoEntriesStillReportsTheReset() =
+        runTest {
+            val first = open()
+            first.vault.put(portalA, Secret("fake-password-1"))
+            first.vault.delete(portalA)
+            first.close()
+            kek.delete()
+
+            val second = open()
+            assertEquals(
+                VaultPut.StoredAfterReset(emptySet()),
+                second.vault.put(portalB, Secret("fake-password-2")),
+            )
+            second.close()
+        }
+
+    @Test
+    fun putWithEntriesButNoKeysetReportsThemLost() =
+        runTest {
+            val store = open()
+            // Entries with no keyset, as after a bad restore; one name is not a valid slot.
+            store.rewrite {
+                putEntries(portalA.name, ByteString.copyFromUtf8("fake-ciphertext"))
+                putEntries(aiKey.name, ByteString.copyFromUtf8("fake-ciphertext"))
+                putEntries("Not A Slot", ByteString.copyFromUtf8("fake-junk"))
+            }
+
+            assertEquals(
+                VaultPut.StoredAfterReset(setOf(portalA, aiKey)),
+                store.vault.put(portalB, Secret("fake-password-2")),
+            )
+            assertEquals(setOf(portalB), store.vault.slots())
+            assertEquals(found("fake-password-2"), store.vault.get(portalB))
+            store.close()
+        }
+
+    @Test
+    fun aTransientKeystoreFailureOnGetThrowsAndChangesNothing() =
+        runTest {
+            val failures =
+                listOf<Pair<String, FakeKek.() -> Unit>>(
+                    "existing: ProviderException" to { existingFailure = ProviderException("fake") },
+                    "existing: KeyStoreException" to { existingFailure = KeyStoreException("fake") },
+                    "existing: wrapped KeyStoreException" to {
+                        existingFailure = GeneralSecurityException("fake", KeyStoreException("fake"))
+                    },
+                    "decrypt: ProviderException" to { decryptFailure = ProviderException("fake") },
+                )
+            for ((name, fail) in failures) {
+                val kek = FakeKek()
+                val first = open(kek)
+                first.vault.wipe()
+                first.vault.put(portalA, Secret("fake-password-1"))
+                first.close()
+
+                // A restart, so the keyset has to be unwrapped through the Keystore again.
+                val second = open(kek)
+                val before = second.stored()
+                kek.fail()
+
+                val thrown = assertThrowsVaultException { second.vault.get(portalA) }
+                assertTrue("$name: says to retry", thrown.message.orEmpty().contains("try again"))
+                assertEquals("$name: file unchanged", before, second.stored())
+                assertEquals("$name: no new key", 1, kek.createCount)
+
+                kek.existingFailure = null
+                kek.decryptFailure = null
+                assertEquals(
+                    "$name: readable once the Keystore is back",
+                    found("fake-password-1"),
+                    second.vault.get(portalA),
+                )
+                second.close()
+            }
+        }
+
+    @Test
+    fun aTransientKeystoreFailureOnPutThrowsAndChangesNothing() =
+        runTest {
+            val first = open()
+            first.vault.put(portalA, Secret("fake-password-1"))
+            first.close()
+
+            val second = open()
+            val before = second.stored()
+            kek.existingFailure = ProviderException("fake")
+            val thrown = assertThrowsVaultException { second.vault.put(portalB, Secret("fake-password-2")) }
+            assertTrue(thrown.message.orEmpty().contains("try again"))
+            assertEquals("file unchanged", before, second.stored())
+            assertEquals("no new key", 1, kek.createCount)
+
+            kek.existingFailure = null
+            assertEquals(VaultPut.Stored, second.vault.put(portalB, Secret("fake-password-2")))
+            assertEquals(found("fake-password-1"), second.vault.get(portalA))
+            second.close()
+        }
+
+    @Test
+    fun aCryptographicFailureFromTheKeyIsUnreadable() =
+        runTest {
+            val failures =
+                listOf<Pair<String, FakeKek.() -> Unit>>(
+                    "existing: plain GeneralSecurityException" to {
+                        existingFailure =
+                            GeneralSecurityException(
+                                "fake",
+                            )
+                    },
+                    "decrypt: bad tag" to { decryptFailure = AEADBadTagException("fake") },
+                )
+            for ((name, fail) in failures) {
+                val kek = FakeKek()
+                val first = open(kek)
+                first.vault.wipe()
+                first.vault.put(portalA, Secret("fake-password-1"))
+                first.close()
+
+                val second = open(kek)
+                val before = second.stored()
+                kek.fail()
+                assertEquals(name, VaultRead.Unreadable, second.vault.get(portalA))
+                assertEquals("$name: file unchanged", before, second.stored())
+                second.close()
+            }
+        }
+
+    @Test
+    fun transientKeystoreFailuresAreToldApartFromCryptographicOnes() {
+        val cases =
+            mapOf(
+                ProviderException("fake") to true,
+                KeyStoreException("fake") to true,
+                GeneralSecurityException("fake", ProviderException("fake")) to true,
+                GeneralSecurityException("fake") to false,
+                AEADBadTagException("fake") to false,
+                GeneralSecurityException("fake", AEADBadTagException("fake")) to false,
+            )
+        for ((failure, transient) in cases) {
+            assertEquals(failure.toString(), transient, failure.isTransientKeystoreFailure())
+        }
+    }
+
+    private suspend fun assertThrowsVaultException(block: suspend () -> Unit): VaultException {
+        try {
+            block()
+        } catch (e: VaultException) {
+            return e
+        }
+        throw AssertionError("expected VaultException")
+    }
 }
 
 private fun ByteString.flipped(index: Int): ByteString {
