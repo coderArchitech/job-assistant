@@ -134,7 +134,7 @@ One Room database (`agent.db`, schema exported and versioned) holds all non-secr
 | `UsageRecord` | runId, provider, model, task, inputTokens, outputTokens, cachedTokens, estimatedCost | One row per AI call |
 | `DailyReport` | date, countsByStatus, countsByPortal, replies, failures, cost | Written by `ReportWorker` from the same queries the Applications screen uses |
 
-Lists such as skills are stored as JSON columns through kotlinx.serialization type converters. Settings that are not records (thresholds, schedule, selected models) live in Proto DataStore.
+Lists such as skills are stored as JSON columns through kotlinx.serialization type converters. Settings that are not records (thresholds, schedule, selected models) live in Proto DataStore; see **Settings** below.
 
 **Domain types** (`:core:model`, task T1.02). Every entity above has a plain Kotlin type in `com.coderarchitech.jobassistant.core.model`, with no Android dependency; Room entities in `:core:data` map to and from them. Conventions:
 
@@ -145,6 +145,26 @@ Lists such as skills are stored as JSON columns through kotlinx.serialization ty
 - **JSON columns.** Value types stored as JSON (`Skill`, `Role`, `Education`, `Preferences`, `DealBreakers`, `StandardAnswer`, `Salary`, `JobFilters`, `RunSchedule`, `RunError`) are `@Serializable`; new fields get defaults so older rows still decode. `YearMonth` is stored as `"YYYY-MM"`.
 - **No secrets.** No type has a field for a password, token, cookie or OTP; `Portal.vaultKey` (`portal/<id>`) names the vault slot instead.
 - `AiProvider`, `AiTask` and `UsageRecord` live here because usage rows are data; the request and response types stay in `:ai`.
+
+**Settings** (`:core:data`, task T1.06). App-wide settings are one `AppSettings` value (`:core:model`), stored in the Proto DataStore file `files/datastore/settings.pb` (schema `core/data/src/main/proto/settings.proto`) and read through `SettingsRepository` (`settings: Flow<AppSettings>`, `update(transform)`, `reset()`).
+
+| Group | Fields and defaults | Source |
+| --- | --- | --- |
+| Thresholds | High 75, Partial 50 | PRD |
+| Default schedule | Every 6 hours, any network, not charging-only; copied into each new preset | Design |
+| Report time | 21:00 in the device time zone | PRD |
+| Caps | 25 applies a day overall, 10 per new portal, 10 emails a day | PRD |
+| Budget | $10 a month; generic browser agent $0 a day, so it stays off until the user gives it a budget | Chosen in T1.06 |
+| AI | Provider (unset until onboarding), model override per task (none: use the remote-config default) | PRD FR10 |
+| Toggles | Auto-send emails off, email digest off | PRD |
+
+Rules for reading and changing the file:
+
+- The app always writes a complete message, with every scalar `optional` so a missing field is told apart from a real 0 or `false`. A missing field takes its default, so adding a setting needs no migration. `schema_version` (now 1) is reserved for a change that "missing means default" cannot express.
+- Enums are stored by constant name, so those names are a storage format: `StoredEnumNamesTest` fails if one is renamed. An unknown name falls back to the default; an override for an unknown task is dropped.
+- Caps and budget are checked field by field: one negative value resets only that field and never undoes a lower limit set elsewhere. Thresholds are checked as a pair. A model override must look like a model id; text shaped like an API key (`sk-...`) is rejected, so a key pasted in the wrong field is never stored outside the vault.
+- A corrupt file is replaced with the defaults. A read that keeps failing with an I/O error is retried three times (100, 200, 400 ms) and then fails the flow instead of inventing values, so the budget guard and caps can fail closed.
+- No secrets: the API key is in the vault; `settings.pb` holds only the provider name and model ids.
 
 ![Job status: 10 statuses, 3 internal states](images/design-job-status.png)
 
