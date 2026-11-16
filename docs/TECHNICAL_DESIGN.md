@@ -2,7 +2,7 @@
 
 Nov 16, 2026 · @nitesh
 
-> Companion to the [Phase 1 PRD](PRD.md). Exported from the [live doc](https://claude.ai/artifact/E7tr7z3nCJ8AbweFxfgua6); edit there and re-export to keep both in sync.
+> Companion to the [Phase 1 PRD](PRD.md); the task breakdown is in [TASK.md](../TASK.md). This file is the source of truth; edit it here.
 
 Phase 1 ships as a single Android app in Kotlin and Jetpack Compose. A WorkManager pipeline discovers, scores and tailors jobs in the background; applying runs in a visible WebView session only after the user approves. Everything is stored on the phone, and only calls to the user's AI provider, job sites and Gmail leave it.
 
@@ -149,7 +149,7 @@ interface Embedder {
 | Embeddings | No embeddings endpoint, so the on-device embedder is used | Embeddings API (model chosen in remote config) |
 | Failure handling | Check `stop_reason` before reading content, including `refusal`; never send `temperature` | Check `finish_reason` and refusal fields |
 
-**Client libraries.** Week 1 includes a spike on the official Java SDKs (`com.anthropic:anthropic-java`, `com.openai:openai-java`) on API 29 with R8. If APK size, method count or Android compatibility rule them out, the fallback is a thin Retrofit client over the same REST shapes.
+**Client libraries.** The foundation milestone starts with a spike on the official Java SDKs (`com.anthropic:anthropic-java`, `com.openai:openai-java`) on API 29 with R8. If APK size, method count or Android compatibility rule them out, the fallback is a thin Retrofit client over the same REST shapes.
 
 **Structured output, not forced tools.** Current Claude models reject forced `tool_choice`, so every task that needs JSON uses the schema-constrained output mode. Each response is still parsed and validated against the Kotlin type; a failure is retried once, then the job is marked `Failed` with the raw text kept for debugging.
 
@@ -191,7 +191,7 @@ interface JobSource {
 | Hacker News "Who is hiring" | Algolia HN API: `search_by_date?tags=story,author_whoishiring`, then `items/{id}` | Comment id | Free-text comments; regex pre-filter, then LLM extraction into postings |
 | Naukri, Instahyre, custom portals | `PortalAdapter.search(preset)` in the WebView | Unseen ids | Needs a live session; capped and paced like applying |
 
-Only the Lever endpoint was checked against its documentation for this draft; the others are to be confirmed in week 4 before each client is built.
+Only the Lever endpoint was checked against its documentation for this draft; the others are to be confirmed before each client is built.
 
 **Normalization**
 
@@ -265,7 +265,7 @@ Portals are driven by an Android WebView with JavaScript adapters, because Playw
 
 Built-in portals (Naukri, Instahyre, Greenhouse and Lever forms) are JS bundles with a manifest: version, selectors, flows, health-check steps and `minAppVersion`. Kotlin wraps each in a `ScriptedPortalAdapter` that implements the PRD's `PortalAdapter` contract.
 
-Bundles come from the static config host so selectors can be fixed without an app release. Each bundle is signed with Ed25519; the app verifies it against a public key compiled into the app and falls back to the last good or bundled version if verification fails. Google Play's rule against downloading executable code exempts JavaScript running in a WebView, which this design relies on; the Play policy review in week 13 must confirm it.
+Bundles come from the static config host so selectors can be fixed without an app release. Each bundle is signed with Ed25519; the app verifies it against a public key compiled into the app and falls back to the last good or bundled version if verification fails. Google Play's rule against downloading executable code exempts JavaScript running in a WebView, which this design relies on; the Play policy review in the hardening milestone must confirm it.
 
 **Apply flow** (built-in adapters)
 
@@ -384,7 +384,7 @@ The app targets API 36, which Google Play has required for new apps and updates 
 | Runtime-registered receivers must declare exported or not | API 34+ | SMS consent receiver registered as exported with the Play services permission |
 | Edge-to-edge is enforced with no opt-out | API 36 target | All Compose screens handle window insets from the start |
 
-**Play policy checklist** (to settle in the week 13 review): foreground-service type declaration with a demo video; Data safety form covering AI sharing, credentials and Gmail; prominent disclosure before collecting portal credentials; Gmail OAuth verification for `gmail.send`; confirmation that remotely updated WebView JavaScript is allowed; no Accessibility API, no SMS permissions.
+**Play policy checklist** (to settle in the hardening review): foreground-service type declaration with a demo video; Data safety form covering AI sharing, credentials and Gmail; prominent disclosure before collecting portal credentials; Gmail OAuth verification for `gmail.send`; confirmation that remotely updated WebView JavaScript is allowed; no Accessibility API, no SMS permissions.
 
 ## Testing and release
 
@@ -400,7 +400,7 @@ Every external dependency (job APIs, AI providers, portals) is tested against re
 | UI | Compose UI tests, screenshot tests in light and dark themes | Screens, filter chips, TalkBack labels, 48dp touch targets | Every push |
 | Live checks | Test accounts on a physical device | Adapter health checks and one end-to-end apply per built-in portal | Daily, low volume |
 | Acceptance | Manual scripts for BR1–BR6 | The PRD acceptance tests on Android 10, 14 and 16, including one Xiaomi or Samsung device | Each milestone and release |
-| Security | Static scan, manual review | Vault, backup exclusions, log redaction, bridge origin rules | Week 13 and before release |
+| Security | Static scan, manual review | Vault, backup exclusions, log redaction, bridge origin rules | Hardening milestone and before release |
 
 **CI** (GitHub Actions): lint (Android Lint, detekt, ktlint), unit and contract tests, migration tests, a release build with R8, and instrumented tests on emulators at API 29, 34 and 36.
 
@@ -408,26 +408,32 @@ Every external dependency (job APIs, AI providers, portals) is tested against re
 
 ## Delivery plan
 
-The PRD's 14-week, five-milestone plan holds; this design adds engineering exit criteria at each gate. Weeks 7–10 carry the most risk because portal adapters are the least predictable work.
+The PRD's five milestones hold, built in order; this design adds engineering exit criteria at each gate. Portals and applying carries the most risk because portal adapters are the least predictable work. [TASK.md](../TASK.md) breaks each milestone into tasks.
 
-![Delivery plan: 5 milestones over 14 weeks](images/design-delivery-plan.png)
+| Milestone | Exit criteria |
+| --- | --- |
+| Foundation | Keys validate on both providers; a resume becomes a confirmed profile; the SDK decision is made |
+| Discovery and scoring | 3+ sources deduplicated; at least 70% of jobs filtered before the LLM; tiers shown in Review |
+| **Portals and applying** | Naukri and Greenhouse applied end to end; SMS OTP login works; sessions reused |
+| Outreach and reporting | Gmail send with approval; report counts match the Applications screen; the budget cap pauses runs |
+| Hardening and beta | Security review closed; Play policy pre-check passed; 20-user closed beta live |
 
-Two tasks have outside lead times and should start early: Gmail OAuth verification for `gmail.send` (submit in week 4) and the foreground-service and Play policy declarations (draft in week 7).
+Two tasks have outside lead times and should start early: Gmail OAuth verification for `gmail.send` (submit during discovery and scoring) and the foreground-service and Play policy declarations (draft at the start of portals and applying).
 
 ## Open technical questions
 
 These need a decision before the milestone named; the PRD's product questions (cloud runner, auto-submit timing, pricing) are not repeated here.
 
-1. **SDKs or thin clients** (week 1): do the official Anthropic and OpenAI Java SDKs fit on API 29 with R8, or do we keep our own Retrofit clients?
-2. **Encrypt the database?** (week 3): Room holds CTC, notice period and job history but no secrets. SQLCipher adds protection at a cost in APK size and startup time.
-3. **Cloud backup of non-secret data** (week 3): back up Room and settings so a new phone keeps history, or disable backup entirely for simplicity?
-4. **Foreground service type** (week 7): `dataSync` or `specialUse` for the apply session, given Play's declaration review?
-5. **On-device embedder** (week 4): which model, bundled or downloaded on first use, and its size budget?
-6. **Reply tracking scope** (week 11): request `gmail.readonly` at launch, after confirming with Google which review applies to on-device-only access, or ship manual reply marking first?
-7. **Config host signing** (week 7): who holds the Ed25519 private key, and how is it rotated without stranding old app versions?
-8. **Crash reporting** (week 13): on-device logs with a user-initiated export only, or opt-in Crashlytics, which sends data off the device?
-9. **Batch scoring** (week 6): use Anthropic's Message Batches (half price, delayed results) for background scoring, collecting results on the next run?
-10. **Hacker News extraction cost** (week 6): the monthly thread has hundreds of comments; how aggressive should the regex pre-filter be before the LLM?
+1. **SDKs or thin clients** (start of foundation): do the official Anthropic and OpenAI Java SDKs fit on API 29 with R8, or do we keep our own Retrofit clients?
+2. **Encrypt the database?** (end of foundation): Room holds CTC, notice period and job history but no secrets. SQLCipher adds protection at a cost in APK size and startup time.
+3. **Cloud backup of non-secret data** (end of foundation): back up Room and settings so a new phone keeps history, or disable backup entirely for simplicity?
+4. **Foreground service type** (start of portals and applying): `dataSync` or `specialUse` for the apply session, given Play's declaration review?
+5. **On-device embedder** (start of discovery and scoring): which model, bundled or downloaded on first use, and its size budget?
+6. **Reply tracking scope** (start of outreach and reporting): request `gmail.readonly` at launch, after confirming with Google which review applies to on-device-only access, or ship manual reply marking first?
+7. **Config host signing** (start of portals and applying): who holds the Ed25519 private key, and how is it rotated without stranding old app versions?
+8. **Crash reporting** (start of hardening): on-device logs with a user-initiated export only, or opt-in Crashlytics, which sends data off the device?
+9. **Batch scoring** (end of discovery and scoring): use Anthropic's Message Batches (half price, delayed results) for background scoring, collecting results on the next run?
+10. **Hacker News extraction cost** (end of discovery and scoring): the monthly thread has hundreds of comments; how aggressive should the regex pre-filter be before the LLM?
 
 ## Sources
 
@@ -438,4 +444,4 @@ These need a decision before the milestone named; the PRD's product questions (c
 - [Gmail API scopes](https://developers.google.com/workspace/gmail/api/auth/scopes): `gmail.send` sensitive, `gmail.readonly` restricted (via search summary).
 - [Jetpack Security crypto package reference](https://developer.android.com/reference/kotlin/androidx/security/crypto/package-summary): deprecation of `EncryptedSharedPreferences` (via search summary).
 
-The network in this drafting session blocked most documentation sites, so other endpoints and platform limits come from working knowledge and are marked for confirmation in the week they are built.
+The network in this drafting session blocked most documentation sites, so other endpoints and platform limits come from working knowledge and are marked for confirmation when they are built.

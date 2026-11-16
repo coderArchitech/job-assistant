@@ -131,15 +131,15 @@ app/
 
 ## Phase 1 delivery plan
 
-Estimated 14 weeks for two Android developers (planning assumption):
+Five milestones, built in order. [TASK.md](TASK.md) breaks each one into tasks.
 
-| Weeks | Milestone | Scope |
-| --- | --- | --- |
-| 1–3 | Foundation | Profile and resume parsing, AI provider settings, Room, Keystore vault, app shell |
-| 4–6 | Discovery and scoring | Job APIs, deduplication, hard filters, embeddings, LLM scoring, Jobs and Review screens |
-| 7–10 | Portals and applying | Portal manager, Naukri and Instahyre adapters, session reuse, SMS OTP, Greenhouse/Lever forms, Agent at work screen |
-| 11–12 | Outreach and reporting | Gmail send, LinkedIn drafts, follow-ups, daily report, usage meter, scheduling |
-| 13–14 | Hardening and beta | Security review, Play policy review, adapter health checks, closed beta with 20 users |
+| Milestone | Scope |
+| --- | --- |
+| Foundation | Profile and resume parsing, AI provider settings, Room, Keystore vault, app shell |
+| Discovery and scoring | Job APIs, deduplication, hard filters, embeddings, LLM scoring, Jobs and Review screens |
+| Portals and applying | Portal manager, Naukri and Instahyre adapters, session reuse, SMS OTP, Greenhouse/Lever forms, Agent at work screen |
+| Outreach and reporting | Gmail send, LinkedIn drafts, follow-ups, daily report, usage meter, scheduling |
+| Hardening and beta | Security review, Play policy review, adapter health checks, closed beta with 20 users |
 
 ## Requirements
 

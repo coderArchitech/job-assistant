@@ -2,7 +2,7 @@
 
 Nov 16, 2026 · @nitesh
 
-> Engineering detail is in the [Technical Design](TECHNICAL_DESIGN.md). Exported from the [live doc](https://claude.ai/artifact/Sv2XUPALWcvekUmgoAjW5n); edit there and re-export to keep both in sync.
+> Engineering detail is in the [Technical Design](TECHNICAL_DESIGN.md), and the task breakdown is in [TASK.md](../TASK.md). This file is the source of truth; edit it here.
 
 ## Overview
 
@@ -327,13 +327,13 @@ The biggest risk is portal accounts being restricted for automated use; the prod
 
 ## Phase 1 delivery plan
 
-All features ship together in Phase 1, built in five milestones over an estimated 14 weeks for two Android developers; the estimate is a planning assumption to confirm with the team.
+All features ship together in Phase 1, built in five milestones in this order.
 
-1. Weeks 1 to 3, foundation: profile and resume parsing, AI provider and model settings, Room database, Keystore vault, app shell.
-2. Weeks 4 to 6, discovery and scoring: job APIs, deduplication, hard filters, embeddings, LLM scoring, Jobs and Review screens.
-3. Weeks 7 to 10, portals and applying: portal manager, Naukri and Instahyre adapters, session reuse, SMS OTP, Greenhouse and Lever forms, Agent at work screen.
-4. Weeks 11 to 12, outreach and reporting: Gmail send, LinkedIn drafts, follow-ups, daily report, usage meter, scheduling.
-5. Weeks 13 to 14, hardening and beta: security review, Play policy review, adapter health checks, closed beta with 20 users.
+1. Foundation: profile and resume parsing, AI provider and model settings, Room database, Keystore vault, app shell.
+2. Discovery and scoring: job APIs, deduplication, hard filters, embeddings, LLM scoring, Jobs and Review screens.
+3. Portals and applying: portal manager, Naukri and Instahyre adapters, session reuse, SMS OTP, Greenhouse and Lever forms, Agent at work screen.
+4. Outreach and reporting: Gmail send, LinkedIn drafts, follow-ups, daily report, usage meter, scheduling.
+5. Hardening and beta: security review, Play policy review, adapter health checks, closed beta with 20 users.
 
 ## Acceptance criteria and open questions
 
