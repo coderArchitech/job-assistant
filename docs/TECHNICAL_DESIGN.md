@@ -72,6 +72,7 @@ Versions live in one Gradle version catalog (`gradle/libs.versions.toml`), and s
 | Android Gradle Plugin | 9.5.0, with its built-in Kotlin support |
 | Kotlin / KSP | 2.4.20 / 2.3.13 |
 | Hilt / Compose BOM | 2.60.1 / 2026.09.00 |
+| kotlinx.serialization | 1.12.0 (plugin version follows Kotlin) |
 | JDK to build / bytecode target | 21 / Java 17 |
 | `minSdk` / `targetSdk` / `compileSdk` | 29 / 36 / 37 |
 | Application ID | `com.coderarchitech.jobassistant` (`.dev` suffix for the dev flavor) |
@@ -134,6 +135,16 @@ One Room database (`agent.db`, schema exported and versioned) holds all non-secr
 | `DailyReport` | date, countsByStatus, countsByPortal, replies, failures, cost | Written by `ReportWorker` from the same queries the Applications screen uses |
 
 Lists such as skills are stored as JSON columns through kotlinx.serialization type converters. Settings that are not records (thresholds, schedule, selected models) live in Proto DataStore.
+
+**Domain types** (`:core:model`, task T1.02). Every entity above has a plain Kotlin type in `com.coderarchitech.jobassistant.core.model`, with no Android dependency; Room entities in `:core:data` map to and from them. Conventions:
+
+- **Validation in the type.** Constructors reject impossible values with `require`: a score outside 0–100, a reason over 140 characters, preset context over 2,000 characters, a salary with no bounds or `min > max`, a negative cap or token count, a built-in portal without an adapter, an LLM score without a model.
+- **Tier is computed, not stored.** `TierThresholds(high = 75, partial = 50).tierFor(score)` gives the tier, so changing thresholds re-tiers stored scores without AI calls.
+- **Statuses.** `JobStatus` holds the ten PRD statuses plus `READY`, `NEEDS_INPUT` and `SUBMITTING`, which are internal and show as `APPROVED` (`userFacing`). `ApplicationStatus` adds `CHECK_MANUALLY` for an attempt left in `SUBMITTING` after a crash, and `APPLY_MANUALLY` for redirects to unsupported sites. Allowed transitions are part of T1.05.
+- **Units.** Times are `java.time.Instant`, dates `LocalDate`, salaries whole currency units with an ISO 4217 code and a period, and AI cost micro-US-dollars (`1_000_000` = $1) so sums stay exact.
+- **JSON columns.** Value types stored as JSON (`Skill`, `Role`, `Education`, `Preferences`, `DealBreakers`, `StandardAnswer`, `Salary`, `JobFilters`, `RunSchedule`, `RunError`) are `@Serializable`; new fields get defaults so older rows still decode. `YearMonth` is stored as `"YYYY-MM"`.
+- **No secrets.** No type has a field for a password, token, cookie or OTP; `Portal.vaultKey` (`portal/<id>`) names the vault slot instead.
+- `AiProvider`, `AiTask` and `UsageRecord` live here because usage rows are data; the request and response types stay in `:ai`.
 
 ![Job status: 10 statuses, 3 internal states](images/design-job-status.png)
 

@@ -16,6 +16,8 @@ style:
     ignoreAnnotated: ['Preview']
   MagicNumber:
     ignorePropertyDeclaration: true
+    # Enum constructor arguments, such as RunInterval(hours = 6), name themselves.
+    ignoreEnums: true
     ignoreCompanionObjectPropertyDeclaration: true
     excludes: ['**/test/**', '**/androidTest/**']
 
