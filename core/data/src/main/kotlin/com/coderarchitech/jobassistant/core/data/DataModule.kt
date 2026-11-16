@@ -8,6 +8,7 @@ import com.coderarchitech.jobassistant.core.data.settings.SETTINGS_FILE_NAME
 import com.coderarchitech.jobassistant.core.data.settings.SettingsRepository
 import com.coderarchitech.jobassistant.core.data.settings.createSettingsDataStore
 import com.coderarchitech.jobassistant.core.data.settings.proto.SettingsProto
+import com.coderarchitech.jobassistant.core.model.IoDispatcher
 import dagger.Binds
 import dagger.Module
 import dagger.Provides

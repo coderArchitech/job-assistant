@@ -4,13 +4,18 @@ import androidx.datastore.core.DataStore
 import com.coderarchitech.jobassistant.core.data.settings.proto.SettingsProto
 import com.coderarchitech.jobassistant.core.model.AppSettings
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import java.io.IOException
 import javax.inject.Inject
 
 /** Reads and changes the app-wide [AppSettings]. Values survive app restarts. */
 interface SettingsRepository {
-    /** The current settings, then every change. Emits the defaults when nothing was saved yet. */
+    /**
+     * The current settings, then every change. Emits the defaults when nothing was saved yet, and
+     * when the file cannot be read (an I/O error), so a disk problem never crashes a collector.
+     */
     val settings: Flow<AppSettings>
 
     /**
@@ -32,7 +37,9 @@ internal class DataStoreSettingsRepository
         override val settings: Flow<AppSettings> =
             dataStore.data
                 .map { it.toDomain() }
-                .distinctUntilChanged()
+                .catch { error ->
+                    if (error is IOException) emit(AppSettings()) else throw error
+                }.distinctUntilChanged()
 
         override suspend fun update(transform: (AppSettings) -> AppSettings): AppSettings =
             dataStore

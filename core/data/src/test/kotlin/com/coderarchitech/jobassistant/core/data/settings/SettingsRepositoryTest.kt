@@ -142,4 +142,14 @@ class SettingsRepositoryTest {
             assertEquals(changed, second.repository.settings.first())
             second.close()
         }
+
+    @Test
+    fun anUnreadableFileEmitsTheDefaultsInsteadOfFailing() =
+        runTest {
+            // A directory where the file should be makes every read throw an IOException.
+            check(file.mkdirs())
+            val store = open()
+            assertEquals(AppSettings(), store.repository.settings.first())
+            store.close()
+        }
 }
