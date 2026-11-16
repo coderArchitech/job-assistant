@@ -1,0 +1,19 @@
+# Gradle and build output
+.gradle/
+.kotlin/
+build/
+/captures/
+
+# Local machine config
+local.properties
+*.iml
+.idea/
+.DS_Store
+
+# Signing material never goes in the repo (task T0.07)
+*.jks
+*.keystore
+keystore.properties
+
+# Node (Playwright adapter tests)
+node_modules/

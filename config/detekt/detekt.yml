@@ -1,0 +1,27 @@
+# Builds on detekt's default rules (buildUponDefaultConfig = true). Only differences are listed.
+config:
+  validation: true
+
+naming:
+  FunctionNaming:
+    # Composable functions are PascalCase by convention.
+    ignoreAnnotated: ['Composable']
+
+# `!!` outside tests is caught by scripts/ci/check_forbidden_patterns.py (rule force-unwrap),
+# because detekt's rule for it needs type resolution.
+
+style:
+  UnusedPrivateMember:
+    # Compose previews are private and only used by the IDE.
+    ignoreAnnotated: ['Preview']
+  MagicNumber:
+    ignorePropertyDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+    excludes: ['**/test/**', '**/androidTest/**']
+
+complexity:
+  LongParameterList:
+    # Composables and Hilt constructors legitimately take many parameters.
+    functionThreshold: 8
+    constructorThreshold: 10
+    ignoreAnnotated: ['Composable', 'Inject']

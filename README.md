@@ -27,7 +27,7 @@ Job seekers spend hours every day repeating the same work across Naukri, Instahy
 
 ## How it works
 
-```
+```text
 Discover ──► Score ──► Tailor ──► Apply ──► Outreach ──► Report
 ```
 
@@ -42,7 +42,7 @@ Discover ──► Score ──► Tailor ──► Apply ──► Outreach ─
 
 Everything runs on the phone. Only calls to your AI provider, job sites and Gmail leave the device.
 
-```
+```text
 ┌──────────────────────────── Android phone ────────────────────────────┐
 │  App UI (Jetpack Compose)                                              │
 │        │                                                               │
@@ -113,7 +113,7 @@ You accept these risks per portal during onboarding.
 
 ## Proposed project structure
 
-```
+```text
 app/
 ├── ui/              # Compose screens: Home, Jobs, Review, Applications,
 │                    # Outreach, Portals, Report, Settings
@@ -148,8 +148,21 @@ Five milestones, built in order. [TASK.md](TASK.md) breaks each one into tasks.
 - Accounts on the job portals you want to automate (optional)
 - A Google account for Gmail outreach (optional)
 
+## Building
+
+Needs JDK 21 and the Android SDK (`ANDROID_HOME`, or `sdk.dir` in `local.properties`).
+
+```bash
+./gradlew assembleDevDebug   # dev build, installs next to prod as com.coderarchitech.jobassistant.dev
+./gradlew unitTest           # JVM unit tests
+./gradlew staticChecks       # Android Lint, detekt and ktlint
+```
+
+See [CLAUDE.md](CLAUDE.md) for all commands and the checks every PR must pass.
+
 ## Documentation
 
 - [Product Requirements Document — Phase 1](docs/PRD.md): goals, user stories, functional and non-functional requirements, risks, acceptance criteria and open questions.
 - [Technical Design — Phase 1](docs/TECHNICAL_DESIGN.md): architecture, modules, pipeline and scheduling, data model, AI provider layer, job sources, portal automation, OTP, outreach, security, Android platform constraints, testing and delivery plan.
 - [Implementation tasks](TASK.md): every task needed to build Phase 1, grouped by milestone, with dependencies and done-when checks.
+- [CLAUDE.md](CLAUDE.md): rules and workflow for working in this repo with Claude Code, including the project agents (`.claude/agents/`) and skills (`.claude/skills/`).
