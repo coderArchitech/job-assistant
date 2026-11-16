@@ -207,7 +207,7 @@ class SettingsMapperTest {
     }
 
     @Test
-    fun anInvalidGroupFallsBackToItsDefaultsWhileOtherGroupsSurvive() {
+    fun invalidStoredValuesFallBackWithoutUndoingOtherLimits() {
         val stored = nonDefault.toProto()
         val cases: List<Triple<String, SettingsProto, AppSettings>> =
             listOf(
@@ -227,20 +227,31 @@ class SettingsMapperTest {
                     nonDefault.copy(thresholds = TierThresholds()),
                 ),
                 Triple(
-                    "negative cap",
+                    // Only the bad field resets; the lowered portal cap (5) and overall cap survive.
+                    "negative email cap",
                     stored
                         .toBuilder()
                         .setCaps(stored.caps.toBuilder().setDailyEmails(-1))
                         .build(),
-                    nonDefault.copy(caps = Caps()),
+                    nonDefault.copy(caps = nonDefault.caps.copy(dailyEmails = Caps.DEFAULT_DAILY_EMAILS)),
                 ),
                 Triple(
-                    "negative budget",
+                    "negative monthly budget keeps the agent budget",
                     stored
                         .toBuilder()
                         .setBudget(BudgetProto.newBuilder().setMonthlyCapMicros(-5).setBrowserAgentDailyMicros(1))
                         .build(),
-                    nonDefault.copy(budget = Budget()),
+                    nonDefault.copy(budget = Budget(Budget.DEFAULT_MONTHLY_CAP_MICROS, browserAgentDailyMicros = 1)),
+                ),
+                Triple(
+                    "model override that is not a model id is dropped",
+                    stored
+                        .toBuilder()
+                        .setAi(stored.ai.toBuilder().putModelOverrides("SCORE", "sk-ant-fake-key"))
+                        .build(),
+                    nonDefault.copy(
+                        ai = nonDefault.ai.copy(modelOverrides = nonDefault.ai.modelOverrides - AiTask.SCORE),
+                    ),
                 ),
             )
         for ((name, proto, expected) in cases) assertEquals(name, expected, proto.toDomain())

@@ -76,7 +76,18 @@ data class AiSettings(
     val modelOverrides: Map<AiTask, String> = emptyMap(),
 ) {
     init {
-        require(modelOverrides.values.none { it.isBlank() }) { "A model override needs a model id" }
+        require(modelOverrides.values.all(::isValidModelId)) { "A model override must be a model id" }
+    }
+
+    companion object {
+        private val MODEL_ID = Regex("^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
+
+        /**
+         * True for a plausible model id such as `claude-haiku-5-5` or `gpt-5.1-mini`. Rejects free
+         * text and anything shaped like an API key (`sk-...`), so a key pasted into the wrong field
+         * is never stored outside the vault.
+         */
+        fun isValidModelId(id: String): Boolean = MODEL_ID.matches(id) && !id.startsWith("sk-")
     }
 }
 

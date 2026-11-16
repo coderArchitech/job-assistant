@@ -2,6 +2,7 @@ package com.coderarchitech.jobassistant.core.model
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalTime
 
@@ -50,6 +51,11 @@ class SettingsTest {
                 "one blank override among valid ones" to {
                     AiSettings(modelOverrides = mapOf(AiTask.SCORE to "model-a", AiTask.TAILOR to "\t"))
                 },
+                "API key pasted as a model id" to { AiSettings(modelOverrides = mapOf(AiTask.SCORE to "sk-fake-key")) },
+                "model id with spaces" to { AiSettings(modelOverrides = mapOf(AiTask.SCORE to "my model")) },
+                "model id over 128 characters" to {
+                    AiSettings(modelOverrides = mapOf(AiTask.SCORE to "m".repeat(129)))
+                },
                 "partial equal to high" to { AppSettings(thresholds = TierThresholds(high = 60, partial = 60)) },
             )
         for ((name, build) in cases) {
@@ -65,5 +71,12 @@ class SettingsTest {
         assertEquals(0L, budget.monthlyCapMicros + budget.browserAgentDailyMicros)
         val ai = AiSettings(modelOverrides = mapOf(AiTask.SCORE to "model-a"))
         assertEquals("model-a", ai.modelOverrides[AiTask.SCORE])
+    }
+
+    @Test
+    fun realModelIdsAreAccepted() {
+        for (id in listOf("claude-haiku-5-5", "claude-opus-5-5", "gpt-5.1-mini", "ft:gpt-4o:org::abc123", "m")) {
+            assertTrue(id, AiSettings.isValidModelId(id))
+        }
     }
 }

@@ -68,8 +68,10 @@ internal fun AppSettings.toProto(): SettingsProto =
         ).build()
 
 /**
- * Never throws: an absent field takes the domain default, an unknown enum name takes the default,
- * and a group whose stored values fail validation falls back to that group's defaults.
+ * Never throws: an absent field takes the domain default and an unknown enum name takes the default.
+ * Caps and budget are checked field by field, so one bad value (such as a negative cap) resets only
+ * that field and never undoes a lower limit the user set elsewhere. Thresholds are checked as a pair
+ * because they constrain each other; a model override that is not a valid model id is dropped.
  */
 internal fun SettingsProto.toDomain(): AppSettings {
     val defaults = AppSettings()
@@ -105,23 +107,20 @@ private fun ScheduleProto.toDomain(default: RunSchedule): RunSchedule =
     )
 
 private fun CapsProto.toDomain(default: Caps): Caps =
-    validOrDefault(default) {
-        Caps(
-            overallDailyApplies = if (hasOverallDailyApplies()) overallDailyApplies else default.overallDailyApplies,
-            defaultPortalDailyApplies =
-                if (hasDefaultPortalDailyApplies()) defaultPortalDailyApplies else default.defaultPortalDailyApplies,
-            dailyEmails = if (hasDailyEmails()) dailyEmails else default.dailyEmails,
-        )
-    }
+    Caps(
+        overallDailyApplies =
+            nonNegativeOr(hasOverallDailyApplies(), overallDailyApplies, default.overallDailyApplies),
+        defaultPortalDailyApplies =
+            nonNegativeOr(hasDefaultPortalDailyApplies(), defaultPortalDailyApplies, default.defaultPortalDailyApplies),
+        dailyEmails = nonNegativeOr(hasDailyEmails(), dailyEmails, default.dailyEmails),
+    )
 
 private fun BudgetProto.toDomain(default: Budget): Budget =
-    validOrDefault(default) {
-        Budget(
-            monthlyCapMicros = if (hasMonthlyCapMicros()) monthlyCapMicros else default.monthlyCapMicros,
-            browserAgentDailyMicros =
-                if (hasBrowserAgentDailyMicros()) browserAgentDailyMicros else default.browserAgentDailyMicros,
-        )
-    }
+    Budget(
+        monthlyCapMicros = nonNegativeOr(hasMonthlyCapMicros(), monthlyCapMicros, default.monthlyCapMicros),
+        browserAgentDailyMicros =
+            nonNegativeOr(hasBrowserAgentDailyMicros(), browserAgentDailyMicros, default.browserAgentDailyMicros),
+    )
 
 private fun AiSettingsProto.toDomain(): AiSettings =
     AiSettings(
@@ -130,7 +129,7 @@ private fun AiSettingsProto.toDomain(): AiSettings =
             modelOverridesMap
                 .mapNotNull { (taskName, model) ->
                     val task = AiTask.entries.firstOrNull { it.name == taskName }
-                    if (task == null || model.isBlank()) null else task to model
+                    if (task == null || !AiSettings.isValidModelId(model)) null else task to model
                 }.toMap(),
     )
 
@@ -139,18 +138,3 @@ private fun FeatureTogglesProto.toDomain(default: FeatureToggles): FeatureToggle
         autoSendEmails = if (hasAutoSendEmails()) autoSendEmails else default.autoSendEmails,
         emailDigest = if (hasEmailDigest()) emailDigest else default.emailDigest,
     )
-
-private inline fun <reified E : Enum<E>> enumByName(
-    name: String,
-    default: E,
-): E = enumValues<E>().firstOrNull { it.name == name } ?: default
-
-private inline fun <T> validOrDefault(
-    default: T,
-    build: () -> T,
-): T =
-    try {
-        build()
-    } catch (_: IllegalArgumentException) {
-        default
-    }

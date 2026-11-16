@@ -11,17 +11,22 @@ import com.coderarchitech.jobassistant.core.model.RunSchedule
 import com.coderarchitech.jobassistant.core.model.TierThresholds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.job
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.io.IOException
 import java.time.LocalTime
 
 class SettingsRepositoryTest {
@@ -144,12 +149,40 @@ class SettingsRepositoryTest {
         }
 
     @Test
-    fun anUnreadableFileEmitsTheDefaultsInsteadOfFailing() =
+    fun aFileThatStaysUnreadableFailsTheFlowInsteadOfInventingDefaults() =
         runTest {
             // A directory where the file should be makes every read throw an IOException.
             check(file.mkdirs())
             val store = open()
-            assertEquals(AppSettings(), store.repository.settings.first())
+            // runTest skips the retry delays in virtual time.
+            val error =
+                try {
+                    store.repository.settings.first()
+                    null
+                } catch (e: IOException) {
+                    e
+                }
+            assertNotNull("Reading should fail after the retries", error)
+            store.close()
+        }
+
+    @Test
+    fun aTransientReadErrorIsRetriedAndThenReadsTheStoredValue() =
+        runTest {
+            val writer = open()
+            writer.repository.update { changed }
+            writer.close()
+
+            // Hide the file behind a directory, start reading, then put the file back.
+            val saved = file.readBytes()
+            check(file.delete() && file.mkdirs())
+            val store = open()
+            val read = async { store.repository.settings.first() }
+            runCurrent()
+            check(file.delete())
+            file.writeBytes(saved)
+            advanceUntilIdle()
+            assertEquals(changed, read.await())
             store.close()
         }
 }
