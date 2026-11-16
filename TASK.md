@@ -1,6 +1,6 @@
 # Phase 1 Implementation Tasks
 
-This file lists every task needed to build Phase 1 of the AI Job Search Agent, based on the [PRD](docs/PRD.md) and the [Technical Design](docs/TECHNICAL_DESIGN.md). The tasks follow the five milestones of the 14-week plan for two Android developers.
+This file lists every task needed to build Phase 1 of the AI Job Search Agent, based on the [PRD](docs/PRD.md) and the [Technical Design](docs/TECHNICAL_DESIGN.md). The tasks are grouped into milestones in build order.
 
 **How to use this file**
 
@@ -12,19 +12,19 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 ## Milestones at a glance
 
-| Milestone | Weeks | Tasks | Gate |
-| --- | --- | --- | --- |
-| [M0 Project setup](#m0-project-setup-week-1) | 1 | T0.01–T0.08 | Empty app builds and passes CI |
-| [M1 Foundation](#m1-foundation-weeks-13) | 1–3 | T1.01–T1.17 | Keys validate on both providers; resume becomes a confirmed profile; SDK decision made |
-| [M2 Discovery and scoring](#m2-discovery-and-scoring-weeks-46) | 4–6 | T2.01–T2.22 | 3+ sources deduplicated; 70% of jobs filtered before the LLM; tiers shown in Review |
-| [M3 Portals and applying](#m3-portals-and-applying-weeks-710) | 7–10 | T3.01–T3.25 | Naukri and Greenhouse applied end to end; SMS OTP login works; sessions reused |
-| [M4 Outreach and reporting](#m4-outreach-and-reporting-weeks-1112) | 11–12 | T4.01–T4.15 | Gmail send with approval; report counts match; budget cap pauses runs |
-| [M5 Hardening and beta](#m5-hardening-and-beta-weeks-1314) | 13–14 | T5.01–T5.16 | Security review closed; Play policy pre-check passed; 20-user beta live |
-| [Decisions](#open-decisions) | Before the week named | D01–D12 | Each decision recorded in the Technical Design |
+| Milestone | Tasks | Gate |
+| --- | --- | --- |
+| [M0 Project setup](#m0-project-setup) | T0.01–T0.08 | Empty app builds and passes CI |
+| [M1 Foundation](#m1-foundation) | T1.01–T1.17 | Keys validate on both providers; resume becomes a confirmed profile; SDK decision made |
+| [M2 Discovery and scoring](#m2-discovery-and-scoring) | T2.01–T2.22 | 3+ sources deduplicated; 70% of jobs filtered before the LLM; tiers shown in Review |
+| [M3 Portals and applying](#m3-portals-and-applying) | T3.01–T3.25 | Naukri and Greenhouse applied end to end; SMS OTP login works; sessions reused |
+| [M4 Outreach and reporting](#m4-outreach-and-reporting) | T4.01–T4.15 | Gmail send with approval; report counts match; budget cap pauses runs |
+| [M5 Hardening and beta](#m5-hardening-and-beta) | T5.01–T5.16 | Security review closed; Play policy pre-check passed; 20-user beta live |
+| [Decisions](#open-decisions) | D01–D12 | Each decision recorded in the Technical Design |
 
 ---
 
-## M0. Project setup (week 1)
+## M0. Project setup
 
 - [ ] **T0.01 Create the Android project** (P0)
   Single-activity Kotlin app, Jetpack Compose with Material 3, `minSdk 29`, `targetSdk 36`, package name decided.
@@ -60,7 +60,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 ---
 
-## M1. Foundation (weeks 1–3)
+## M1. Foundation
 
 ### Spikes and decisions
 
@@ -144,7 +144,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 ---
 
-## M2. Discovery and scoring (weeks 4–6)
+## M2. Discovery and scoring
 
 ### Job sources
 
@@ -246,7 +246,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 ---
 
-## M3. Portals and applying (weeks 7–10)
+## M3. Portals and applying
 
 ### Tailoring
 
@@ -362,11 +362,11 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 ---
 
-## M4. Outreach and reporting (weeks 11–12)
+## M4. Outreach and reporting
 
 ### Gmail and outreach
 
-- [ ] **T4.01 Start Gmail OAuth verification** (P1) · Start in week 4
+- [ ] **T4.01 Start Gmail OAuth verification** (P1) · Start during M2, since Google's review takes time
   Google Cloud project, OAuth consent screen, `gmail.send` scope, privacy policy URL, and verification request.
   _Done when:_ Google approves the app for `gmail.send`.
 
@@ -432,7 +432,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 ---
 
-## M5. Hardening and beta (weeks 13–14)
+## M5. Hardening and beta
 
 ### Security and privacy
 
@@ -516,15 +516,15 @@ Record each decision in the Technical Design's "Open technical questions" sectio
 
 | ID | Decision | Needed by | Blocks |
 | --- | --- | --- | --- |
-| D01 | Official AI SDKs or thin Retrofit clients | Week 1 | T1.12, T1.13 |
-| D02 | Encrypt the Room database with SQLCipher | Week 3 | T1.03 |
-| D03 | Cloud backup of non-secret data, or no backup | Week 3 | T1.08 |
-| D04 | Foreground service type: `dataSync` or `specialUse` | Week 7 | T3.22 |
-| D05 | On-device embedding model, bundled or downloaded, size budget | Week 4 | T2.15 |
-| D06 | Request `gmail.readonly` for reply tracking and email OTP, or ship manual marking only | Week 11 | T4.05 |
-| D07 | Who holds the config-host signing key and how it rotates | Week 7 | T3.09, T3.10 |
-| D08 | Crash reporting: on-device export only, or opt-in Crashlytics | Week 13 | T5.13 |
-| D09 | Use Message Batches for background scoring | Week 6 | T2.17 |
-| D10 | Hacker News regex pre-filter strictness | Week 6 | T2.08 |
-| D11 | Auto-submit at launch, or only after 20 manual approvals (PRD) | Week 10 | T3.21 |
-| D12 | Next portals for dedicated adapters (Wellfound, Cutshort, Hirist, Indeed India) (PRD) | Week 10 | Phase 2 |
+| D01 | Official AI SDKs or thin Retrofit clients | Start of M1 | T1.12, T1.13 |
+| D02 | Encrypt the Room database with SQLCipher | End of M1 | T1.03 |
+| D03 | Cloud backup of non-secret data, or no backup | End of M1 | T1.08 |
+| D04 | Foreground service type: `dataSync` or `specialUse` | Start of M3 | T3.22 |
+| D05 | On-device embedding model, bundled or downloaded, size budget | Start of M2 | T2.15 |
+| D06 | Request `gmail.readonly` for reply tracking and email OTP, or ship manual marking only | Start of M4 | T4.05 |
+| D07 | Who holds the config-host signing key and how it rotates | Start of M3 | T3.09, T3.10 |
+| D08 | Crash reporting: on-device export only, or opt-in Crashlytics | Start of M5 | T5.13 |
+| D09 | Use Message Batches for background scoring | End of M2 | T2.17 |
+| D10 | Hacker News regex pre-filter strictness | End of M2 | T2.08 |
+| D11 | Auto-submit at launch, or only after 20 manual approvals (PRD) | End of M3 | T3.21 |
+| D12 | Next portals for dedicated adapters (Wellfound, Cutshort, Hirist, Indeed India) (PRD) | End of M3 | Phase 2 |
