@@ -71,9 +71,10 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 ### Spikes and decisions
 
-- [ ] **T1.01 Spike: official AI SDKs on Android** (P0) · Depends on T0.02
+- [x] **T1.01 Spike: official AI SDKs on Android** (P0) · Depends on T0.02
   Try `com.anthropic:anthropic-java` and `com.openai:openai-java` on API 29 with R8: APK size, method count, startup time, and whether they work. Record the result as decision D01.
   _Done when:_ D01 is decided and recorded in the Technical Design.
+  _Done in [#7](https://github.com/coderArchitech/job-assistant/pull/7). D01 recorded in the design ("Client libraries") with sizes and on-device timings from the spike branch._
 
 ### Core data and settings
 
@@ -122,11 +123,11 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ a fake provider passes a contract test suite that both real providers will also run.
 
 - [ ] **T1.12 Implement the Anthropic provider** (P0) · Depends on T1.01, T1.10, T1.11
-  Messages API with structured outputs (`output_config.format`); `GET /v1/models` for the key check and model list; prompt caching on the stable prefix; `stop_reason` handling, including `refusal`; no sampling parameters sent; usage (including cached tokens) mapped to `UsageRecord`.
+  Official `anthropic-java` SDK (D01). Messages API with structured outputs (`output_config.format`) from a hand-written JSON Schema, never the class-derived overload; `GET /v1/models` for the key check and model list; prompt caching on the stable prefix; `stop_reason` handling, including `refusal`; no sampling parameters sent; usage (including cached tokens) mapped to `UsageRecord`.
   _Done when:_ the contract suite passes against recorded fixtures, and one live smoke test passes with a real key.
 
 - [ ] **T1.13 Implement the OpenAI provider** (P0) · Depends on T1.01, T1.10, T1.11
-  Structured Outputs with a strict JSON schema, `GET /v1/models` filtered by the remote allowlist, embeddings endpoint, and refusal and `finish_reason` handling.
+  Thin client on OkHttp and kotlinx.serialization (D01). Structured Outputs with a strict JSON schema, `GET /v1/models` filtered by the remote allowlist, embeddings endpoint, and refusal and `finish_reason` handling.
   _Done when:_ the contract suite passes against recorded fixtures, and one live smoke test passes with a real key.
 
 - [ ] **T1.14 Add usage metering and the budget guard** (P0) · Depends on T1.03, T1.11
@@ -523,7 +524,7 @@ Record each decision in the Technical Design's "Open technical questions" sectio
 
 | ID | Decision | Needed by | Blocks |
 | --- | --- | --- | --- |
-| D01 | Official AI SDKs or thin Retrofit clients | Start of M1 | T1.12, T1.13 |
+| D01 | Official AI SDKs or thin Retrofit clients. **Decided in [#7](https://github.com/coderArchitech/job-assistant/pull/7):** `anthropic-java` for Anthropic, thin OkHttp client for OpenAI, hand-written JSON schemas | Start of M1 | T1.12, T1.13 |
 | D02 | Encrypt the Room database with SQLCipher | End of M1 | T1.03 |
 | D03 | Cloud backup of non-secret data, or no backup | End of M1 | T1.08 |
 | D04 | Foreground service type: `dataSync` or `specialUse` | Start of M3 | T3.22 |
