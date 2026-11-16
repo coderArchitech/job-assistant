@@ -58,10 +58,12 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 - [ ] **T0.07 Set up release signing** (P0)
   Play App Signing enrolled; the upload key is kept outside the repo, in CI secrets.
   _Done when:_ CI produces a signed release bundle.
+  _Signing config and the "Release bundle" workflow added in [#6](https://github.com/coderArchitech/job-assistant/pull/6); a bundle signed with a throwaway key verified locally. Still open: the owner creates the upload key, adds the four secrets and enrolls in Play App Signing (design: "Release signing")._
 
 - [ ] **T0.08 Set up the repo for collaboration** (P0)
   Branch protection on `main`, a PR template that asks for the task ID, CODEOWNERS, and an issue label per milestone.
   _Done when:_ a direct push to `main` is rejected.
+  _PR template (in #3), CODEOWNERS, milestone labels and the label sync workflow added in [#6](https://github.com/coderArchitech/job-assistant/pull/6). Still open: the owner turns on branch protection for `main` (design: "Repository settings")._
 
 ---
 

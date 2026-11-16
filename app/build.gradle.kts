@@ -7,11 +7,50 @@ plugins {
 /** Config host URL for a flavor from gradle.properties, quoted for `buildConfigField`. */
 fun configHost(flavor: String): String = "\"${providers.gradleProperty("jobassistant.configHost.$flavor").get()}\""
 
+/**
+ * Release signing with the Play upload key (task T0.07). Each value comes from an environment
+ * variable (CI) or from a Gradle property in the developer's own ~/.gradle/gradle.properties.
+ * Never from this repository. Without all four values, release builds are left unsigned.
+ */
+fun uploadValue(
+    envName: String,
+    propertyName: String,
+): String? =
+    providers
+        .environmentVariable("JOBASSISTANT_UPLOAD_$envName")
+        .orElse(providers.gradleProperty("jobassistant.upload.$propertyName"))
+        .orNull
+        ?.takeIf { it.isNotBlank() }
+
+val uploadStoreFile = uploadValue("STORE_FILE", "storeFile")
+val uploadStorePassword = uploadValue("STORE_PASSWORD", "storePassword")
+val uploadKeyAlias = uploadValue("KEY_ALIAS", "keyAlias")
+val uploadKeyPassword = uploadValue("KEY_PASSWORD", "keyPassword")
+val uploadValues = listOf(uploadStoreFile, uploadStorePassword, uploadKeyAlias, uploadKeyPassword)
+if (uploadValues.any { it != null } && uploadValues.any { it == null }) {
+    throw GradleException(
+        "Release signing needs all four upload-key values (store file, store password, key alias, " +
+            "key password). Only some are set.",
+    )
+}
+
 android {
     defaultConfig {
         applicationId = "com.coderarchitech.jobassistant"
-        versionCode = 1
+        // Play needs a higher versionCode for every upload; the release workflow passes its run number.
+        versionCode = providers.environmentVariable("JOBASSISTANT_VERSION_CODE").orNull?.toInt() ?: 1
         versionName = "0.1.0"
+    }
+
+    signingConfigs {
+        if (uploadStoreFile != null) {
+            create("upload") {
+                storeFile = file(uploadStoreFile)
+                storePassword = uploadStorePassword
+                keyAlias = uploadKeyAlias
+                keyPassword = uploadKeyPassword
+            }
+        }
     }
 
     buildFeatures {
@@ -27,6 +66,7 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             buildConfigField("boolean", "HTTP_LOGGING", "false")
+            signingConfig = signingConfigs.findByName("upload")
         }
     }
 
