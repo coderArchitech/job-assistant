@@ -1,0 +1,68 @@
+// App-wide settings stored in Proto DataStore (`settings.pb`). Mirrors AppSettings in :core:model.
+//
+// Rules for evolving this schema:
+// - The app always writes the complete message, mapped from a validated AppSettings.
+// - Every scalar field is `optional` and every group is a message, so the reader can tell "never
+//   written" from a legal zero or false. A field that is absent maps to the AppSettings default.
+//   A field added later therefore needs no migration: older files simply lack it and get the
+//   default. Add new scalar fields as `optional` too, and never reuse or renumber a field.
+// - Enums are stored as the Kotlin enum constant's name. An unknown name (for example one written
+//   by a newer app version before a downgrade) maps to the default instead of failing.
+// - A group whose stored values fail domain validation falls back to that group's defaults.
+// - schema_version is written as the mapper's current version. Bump it only for a change that the
+//   "absent means default" rule cannot express, and handle the older versions in the mapper.
+syntax = "proto3";
+
+package jobassistant.settings;
+
+option java_package = "com.coderarchitech.jobassistant.core.data.settings.proto";
+option java_multiple_files = true;
+
+message SettingsProto {
+  int32 schema_version = 1;
+  ThresholdsProto thresholds = 2;
+  ScheduleProto default_schedule = 3;
+  // Daily report time as minutes after local midnight (0..1439).
+  optional int32 report_minute_of_day = 4;
+  CapsProto caps = 5;
+  BudgetProto budget = 6;
+  AiSettingsProto ai = 7;
+  FeatureTogglesProto toggles = 8;
+}
+
+message ThresholdsProto {
+  optional int32 high = 1;
+  optional int32 partial = 2;
+}
+
+message ScheduleProto {
+  // RunInterval name.
+  optional string interval = 1;
+  // NetworkRequirement name.
+  optional string network = 2;
+  optional bool charging_only = 3;
+}
+
+message CapsProto {
+  optional int32 overall_daily_applies = 1;
+  optional int32 default_portal_daily_applies = 2;
+  optional int32 daily_emails = 3;
+}
+
+message BudgetProto {
+  // Micro-US-dollars (1_000_000 = $1).
+  optional int64 monthly_cap_micros = 1;
+  optional int64 browser_agent_daily_micros = 2;
+}
+
+message AiSettingsProto {
+  // AiProvider name; absent until onboarding picks a provider.
+  optional string provider = 1;
+  // AiTask name to model id. Entries with an unknown task name are dropped on read.
+  map<string, string> model_overrides = 2;
+}
+
+message FeatureTogglesProto {
+  optional bool auto_send_emails = 1;
+  optional bool email_digest = 2;
+}
