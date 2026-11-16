@@ -66,10 +66,10 @@ Needs JDK 21 and the Android SDK (`ANDROID_HOME`, or `sdk.dir` in an untracked `
 ./gradlew unitTest                        # JVM unit tests in every module
 ./gradlew staticChecks                    # Android Lint, detekt and ktlint in every module
 ./gradlew ktlintFormat                    # fix formatting
-./gradlew connectedDevDebugAndroidTest    # instrumented tests (needs an emulator or device)
+./gradlew deviceTest                      # instrumented tests in every module (needs an emulator or device)
 ```
 
-`unitTest` and `staticChecks` are aggregate tasks registered by the convention plugins in `build-logic/`, so they cover a new module automatically. Playwright tests for the portal adapters (`npm --prefix portals/scripts test`) arrive with the adapter framework in task T3.11; until then that command does not exist.
+`unitTest`, `staticChecks` and `deviceTest` are aggregate tasks registered by the convention plugins in `build-logic/`, so they cover a new module automatically. Playwright tests for the portal adapters (`npm --prefix portals/scripts test`) arrive with the adapter framework in task T3.11; until then that command does not exist.
 
 Build variants: flavors `dev` (package suffix `.dev`, so it installs next to prod) and `prod`, each with `debug` and `release` (R8 shrinking). The config host URL per flavor is set in `gradle.properties` and is empty until task T3.10.
 
@@ -107,7 +107,7 @@ These come from the PRD and design. A PR that breaks one is not mergeable.
 | Check | What it runs |
 | --- | --- |
 | Build, static checks and unit tests | All four variants (release with R8), `unitTest`, `staticChecks` |
-| Instrumented tests (API 29, 34, 36) | `connectedDevDebugAndroidTest` on an emulator per API level |
+| Instrumented tests (API 29, 34, 36) | `deviceTest` (every module's instrumented tests) on an emulator per API level |
 
 Two more workflows run only on `main`: "Release bundle" (`release.yml`) builds the signed Play bundle when the upload-key secrets are set, and "Labels" (`labels.yml`) syncs `.github/labels.json`. Release signing and the GitHub settings that protect `main` are described in the design's "Release signing" and "Repository settings" sections. Never put keystores, passwords or signing values in the repo; `.gitignore` already excludes `*.jks`, `*.keystore` and `keystore.properties`.
 

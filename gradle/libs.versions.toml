@@ -26,6 +26,7 @@ junit4 = "4.13.2"
 protobuf = "4.36.2" # protobuf-javalite runtime and protoc must match
 protobuf-plugin = "0.10.0"
 robolectric = "4.18"
+tink = "1.24.0"
 # Android runtime jar Robolectric 4.18 uses for SDK 36; fetched by Gradle so tests run offline.
 robolectric-android-all = "16-robolectric-13921718-2-i7"
 
@@ -67,6 +68,7 @@ protobuf-javalite = { module = "com.google.protobuf:protobuf-javalite", version.
 protobuf-protoc = { module = "com.google.protobuf:protoc", version.ref = "protobuf" }
 junit4 = { module = "junit:junit", version.ref = "junit4" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+tink-android = { module = "com.google.crypto.tink:tink-android", version.ref = "tink" }
 robolectric-android-all = { module = "org.robolectric:android-all-instrumented", version.ref = "robolectric-android-all" }
 
 # Gradle plugins used by build-logic

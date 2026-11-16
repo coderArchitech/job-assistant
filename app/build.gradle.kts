@@ -148,3 +148,9 @@ tasks.register("staticChecks") {
     description = "Runs Android Lint, detekt and ktlint for the app module."
     dependsOn("lintDevDebug", "detekt", "ktlintCheck")
 }
+
+tasks.register("deviceTest") {
+    group = "verification"
+    description = "Runs instrumented tests for the dev debug variant on a connected device or emulator."
+    dependsOn("connectedDevDebugAndroidTest")
+}
