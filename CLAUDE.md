@@ -98,6 +98,8 @@ These come from the PRD and design. A PR that breaks one is not mergeable.
 | Build, static checks and unit tests | All four variants (release with R8), `unitTest`, `staticChecks` |
 | Instrumented tests (API 29, 34, 36) | `connectedDevDebugAndroidTest` on an emulator per API level |
 
+Two more workflows run only on `main`: "Release bundle" (`release.yml`) builds the signed Play bundle when the upload-key secrets are set, and "Labels" (`labels.yml`) syncs `.github/labels.json`. Release signing and the GitHub settings that protect `main` are described in the design's "Release signing" and "Repository settings" sections. Never put keystores, passwords or signing values in the repo; `.gitignore` already excludes `*.jks`, `*.keystore` and `keystore.properties`.
+
 A safety-rule match that is intentional (for example the LinkedIn host blocklist) needs `// ci-allow: <rule-id> (reason)` on that line, and a reviewer must agree with the reason. The safety rules also forbid `!!` in `src/main` code (rule `force-unwrap`), because detekt can only check that with full type analysis.
 
 ## Kotlin conventions

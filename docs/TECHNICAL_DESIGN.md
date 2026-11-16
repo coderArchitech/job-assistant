@@ -434,6 +434,35 @@ Every external dependency (job APIs, AI providers, portals) is tested against re
 
 **Release**: Play App Signing; internal track for the team, closed testing for the 20-user beta, then production with a staged rollout. Adapter bundles and the price table are released separately on the config host, each with a version and `minAppVersion`, and can be rolled back without an app update.
 
+### Release signing
+
+Google Play holds the app signing key (Play App Signing); we keep only the **upload key**, which signs what we upload. Losing it is recoverable through Play support; leaking it is not, so it never enters the repository.
+
+- `app/build.gradle.kts` signs release builds only when all four upload-key values are present, read from environment variables (`JOBASSISTANT_UPLOAD_STORE_FILE`, `_STORE_PASSWORD`, `_KEY_ALIAS`, `_KEY_PASSWORD`) or from the developer's own `~/.gradle/gradle.properties` (`jobassistant.upload.storeFile`, `storePassword`, `keyAlias`, `keyPassword`). Some but not all of them set fails the build; none set leaves release builds unsigned.
+- `.github/workflows/release.yml` runs on every push to `main` and on demand, never on pull requests. It writes the key from secrets to a temporary file, builds `bundleProdRelease` with `versionCode` set to the workflow run number, checks the bundle is signed, deletes the key file, and keeps the bundle and R8 mapping as an artifact for 30 days. Without the secrets it posts a warning and builds nothing.
+
+One-time setup, done by the repository owner:
+
+1. Create the upload key on a trusted machine and keep a backup outside the repository:
+   `keytool -genkeypair -keystore upload.jks -storetype PKCS12 -alias upload -keyalg RSA -keysize 4096 -validity 9125`
+2. Add four repository secrets (Settings, Secrets and variables, Actions): `JOBASSISTANT_UPLOAD_KEYSTORE_BASE64` (the output of `base64 -w0 upload.jks`), `JOBASSISTANT_UPLOAD_STORE_PASSWORD`, `JOBASSISTANT_UPLOAD_KEY_ALIAS` and `JOBASSISTANT_UPLOAD_KEY_PASSWORD`.
+3. Run the "Release bundle" workflow and download the bundle.
+4. Create the app in Play Console with application ID `com.coderarchitech.jobassistant`, opt in to Play App Signing, and upload that bundle to the internal track. Play then registers the upload key.
+
+### Repository settings
+
+These live in GitHub settings rather than in files, so they are listed here. Only the repository owner can change them.
+
+| Setting | Where | Value |
+| --- | --- | --- |
+| Branch protection for `main` | Settings, Rules, Rulesets (or Branches) | Require a pull request with 1 approval and Code Owner review; require status checks to pass (list below) and the branch to be up to date; block force pushes and deletion |
+| Required status checks | Same rule | `PR title has a task ID`, `Secret scan`, `Safety rules (CLAUDE.md)`, `TASK.md consistency`, `Docs links and formatting`, `Build, static checks and unit tests`, `Instrumented tests (API 29)`, `Instrumented tests (API 34)`, `Instrumented tests (API 36)` |
+| Automatically delete head branches | Settings, General | On, so a stacked PR moves to `main` when the one below it merges |
+| Secret scanning and push protection | Settings, Code security | On |
+| Dependabot alerts | Settings, Code security | On |
+
+`.github/CODEOWNERS` names the owner for every path, `.github/pull_request_template.md` asks for the task ID, and `.github/labels.json` defines a label per milestone plus `decision` and `security`. The "Labels" workflow creates or updates them whenever that file changes on `main`.
+
 ## Delivery plan
 
 The PRD's five milestones hold, built in order; this design adds engineering exit criteria at each gate. Portals and applying carries the most risk because portal adapters are the least predictable work. [TASK.md](../TASK.md) breaks each milestone into tasks.

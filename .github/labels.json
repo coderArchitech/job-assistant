@@ -1,0 +1,10 @@
+[
+  { "name": "M0 project setup", "color": "5319e7", "description": "TASK.md milestone M0" },
+  { "name": "M1 foundation", "color": "1d76db", "description": "TASK.md milestone M1" },
+  { "name": "M2 discovery and scoring", "color": "0e8a16", "description": "TASK.md milestone M2" },
+  { "name": "M3 portals and applying", "color": "d93f0b", "description": "TASK.md milestone M3" },
+  { "name": "M4 outreach and reporting", "color": "fbca04", "description": "TASK.md milestone M4" },
+  { "name": "M5 hardening and beta", "color": "b60205", "description": "TASK.md milestone M5" },
+  { "name": "decision", "color": "c5def5", "description": "An open decision (Dxx) in TASK.md" },
+  { "name": "security", "color": "000000", "description": "Touches credentials, AI calls, portals, logging, storage or applying" }
+]
