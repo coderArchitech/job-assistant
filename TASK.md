@@ -101,7 +101,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 ### Security
 
-- [ ] **T1.07 Build the credential vault** (P0) · Depends on T0.02
+- [x] **T1.07 Build the credential vault** (P0) · Depends on T0.02 · [#11](https://github.com/coderArchitech/job-assistant/pull/11)
   Tink AEAD (AES-256-GCM) with the keyset wrapped by an Android Keystore key (StrongBox where available). Ciphertexts stored in `vault.pb` (Proto DataStore), each bound to its slot name as associated data. API: `put`, `get`, `delete`, `wipe`.
   _Done when:_ round-trip tests pass on API 29 and 36, and a value copied to another slot fails to decrypt.
 
