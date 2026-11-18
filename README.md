@@ -158,6 +158,15 @@ Needs JDK 21 and the Android SDK (`ANDROID_HOME`, or `sdk.dir` in `local.propert
 ./gradlew staticChecks       # Android Lint, detekt and ktlint
 ```
 
+**Windows, one command.** [`scripts/setup/setup-windows.ps1`](scripts/setup/setup-windows.ps1) installs Git and JDK 21 (with winget) if missing, the Android SDK command-line tools (checksum-verified) and the SDK packages this project needs, clones the repository, writes `local.properties`, creates an API 36 emulator, then builds, installs and opens the dev app. Run it from PowerShell:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\setup\setup-windows.ps1              # from a clone; add -SkipEmulator to use a USB phone instead
+```
+
+Without a clone yet, save the script into the folder that should hold the clone and run it there. It is safe to re-run; if it installed Git or Java, re-run it in a new window. The emulator needs "Windows Hypervisor Platform" turned on in Windows Features.
+
 See [CLAUDE.md](CLAUDE.md) for all commands and the checks every PR must pass.
 
 ## Documentation
