@@ -176,18 +176,18 @@ All AI calls go through two interfaces, so the pipeline never knows which provid
 
 ```kotlin
 interface LlmProvider {
-    val id: ProviderId                                 // ANTHROPIC | OPENAI
+    val id: AiProvider                                 // ANTHROPIC | OPENAI (:core:model)
     suspend fun validateKey(): KeyCheck                // Valid | Invalid | NetworkError
-    suspend fun listModels(): List<ModelInfo>          // live list for the per-task picker
-    suspend fun <T> generate(req: LlmRequest<T>): LlmResult<T>
+    suspend fun listModels(): ModelList                // Available(models) | InvalidKey | NetworkError
+    suspend fun <T> generate(request: LlmRequest<T>): LlmResult<T>
 }
 
 data class LlmRequest<T>(
-    val task: AiTask,              // PARSE_RESUME | SCORE | TAILOR | MAP_QUESTION | BROWSER_STEP
+    val task: AiTask,              // PARSE_RESUME | EXPAND_CONTEXT | SCORE | EXTRACT_POSTINGS | TAILOR | ...
     val system: String,            // stable rubric, cached where the provider supports it
     val context: List<Part>,       // profile, preset context, examples (stable prefix)
     val input: List<Part>,         // the job or page snapshot (varies per call)
-    val schema: OutputSchema<T>,   // JSON Schema + kotlinx serializer for T
+    val schema: OutputSchema<T>,   // hand-written JSON Schema + kotlinx serializer for T
     val maxOutputTokens: Int,
 )
 
@@ -196,6 +196,25 @@ interface Embedder {
     suspend fun embed(texts: List<String>): List<FloatArray>
 }
 ```
+
+These live in `:ai` (task T1.11). Providers never throw for provider or network failures; only cancellation propagates. Every other outcome is a typed `LlmResult`:
+
+| Result | Meaning |
+| --- | --- |
+| `Success(value, usage, model)` | The reply decoded into the requested type |
+| `Refused` | The model declined (Anthropic `refusal`, OpenAI refusal field) |
+| `Truncated` | The reply hit `maxOutputTokens` |
+| `InvalidOutput(rawText, problem)` | The reply did not decode into the type; the raw text is kept for debugging |
+| `InvalidKey` | HTTP 401 or 403; the agent pauses until the user fixes the key |
+| `RateLimited(retryAfter)` | HTTP 429 or 529 still failing after the network layer's retries |
+| `ProviderError(httpStatus)` | Any other HTTP failure that outlasted the retries |
+| `NetworkError` | The provider could not be reached |
+| `Blocked(reason)` | A guard stopped the call before it was sent: `BUDGET_EXCEEDED` (T1.14) or `SECRET_IN_PROMPT` (T1.15) |
+
+- **Schemas.** `OutputSchema` checks at construction that every object in the schema, nested ones included, sets `additionalProperties: false` and lists all its properties in `required`, as both providers' strict modes need. Value limits (score 0–100, reason at most 140 characters) go in the Kotlin type's `init`, because provider support for `minimum` or `maxLength` varies; `decode` turns a failed check into `InvalidOutput`.
+- **Usage.** `TokenUsage` splits input by billing: uncached input, cache reads and cache writes, which never overlap. Anthropic reports the three directly; OpenAI's `prompt_tokens` includes `cached_tokens`, so its uncached input is the difference.
+- **No content in logs.** `toString()` of a text part, a `Success` and an `InvalidOutput` prints sizes, not text, because prompts and replies carry profile data.
+- **Contract suite.** `LlmProviderContract` (in `:ai` tests) fixes what each outcome means: success, refusal, truncation, schema mismatch, 401, 429 with `retry-after`, 5xx and unreachable. A fake provider passes it; the Anthropic and OpenAI providers extend it with MockWebServer fixtures.
 
 | Concern | Anthropic (Claude) | OpenAI (ChatGPT) |
 | --- | --- | --- |
@@ -226,7 +245,7 @@ Rules that follow from the spike:
 
 **Retries.** HTTP 429, 529 and 5xx retry up to 3 times with exponential backoff and jitter, honoring `retry-after`. HTTP 401 marks the key invalid, pauses the agent and notifies. Other 4xx errors fail the call without a retry.
 
-**Usage and budget.** Every response's token usage (including cached tokens) is written to `UsageRecord` and priced from the signed price table, which the user can edit. Before each call the guard adds a worst-case estimate (input tokens plus `maxOutputTokens` at list price) to month-to-date spend; if that exceeds the cap, the call is refused, the agent pauses and Home shows why.
+**Usage and budget.** Every response's token usage (uncached input, cache reads, cache writes and output) is written to `UsageRecord` and priced from the signed price table, which the user can edit. Before each call the guard adds a worst-case estimate (input tokens plus `maxOutputTokens` at list price) to month-to-date spend; if that exceeds the cap, the call is refused, the agent pauses and Home shows why.
 
 **Prompt guard.** A final check scans every outgoing request for the current vault secrets and the last OTP. A match blocks the call and logs a redacted security event. This enforces the PRD rule that passwords, OTPs and cookies never reach a prompt.
 

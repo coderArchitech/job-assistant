@@ -4,6 +4,7 @@ import com.coderarchitech.jobassistant.core.model.AiTask
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -53,8 +54,11 @@ sealed interface Part {
  * decodes the reply into [T]. Never derive the schema from a class with an SDK helper; that needs
  * reflection Android lacks (decision D01).
  *
- * The schema must be an object with `additionalProperties: false`, which both providers' strict
- * structured-output modes require.
+ * Both providers' strict structured-output modes require every object in the schema, nested ones
+ * included, to set `additionalProperties: false` and list all its properties in `required`; the
+ * constructor checks this so a bad schema fails here, not as an HTTP 400. Provider support for
+ * value keywords such as `minimum` or `maxLength` varies, so put those limits in [T]'s own
+ * validation (`require` in `init`), which [decode] enforces.
  */
 class OutputSchema<T>(
     /** Name sent to the provider; letters, digits, `_` and `-`, at most 64 characters. */
@@ -65,19 +69,21 @@ class OutputSchema<T>(
     init {
         require(NAME.matches(name)) { "Schema name must match ${NAME.pattern}" }
         require(jsonSchema["type"] == JsonPrimitive("object")) { "The schema root must be an object" }
-        require(jsonSchema["additionalProperties"] == JsonPrimitive(false)) {
-            "The schema root must set additionalProperties to false"
-        }
+        checkStrict(jsonSchema, path = "$")
     }
 
     /** Decodes a reply's JSON text into [T], or says why it does not fit. */
     fun decode(text: String): Decoded<T> =
         try {
-            Decoded.Value(STRICT_JSON.decodeFromString(serializer, text))
+            // Default Json is strict on purpose: an unknown field means the reply ignored the schema.
+            Decoded.Value(Json.decodeFromString(serializer, text))
         } catch (e: SerializationException) {
             Decoded.Mismatch(e.message ?: "The reply does not match the schema")
         } catch (e: IllegalArgumentException) {
             // A type's own validation (require) failed while decoding.
+            Decoded.Mismatch(e.message ?: "The reply has an invalid value")
+        } catch (e: IllegalStateException) {
+            // A type's own validation (check) failed while decoding.
             Decoded.Mismatch(e.message ?: "The reply has an invalid value")
         }
 
@@ -99,7 +105,35 @@ class OutputSchema<T>(
     private companion object {
         val NAME = Regex("[A-Za-z0-9_-]{1,64}")
 
-        // Strict on purpose: an unexpected field means the reply did not follow the schema.
-        val STRICT_JSON = Json { ignoreUnknownKeys = false }
+        /** Walks every sub-schema; each object must be closed and require all its properties. */
+        fun checkStrict(
+            schema: JsonObject,
+            path: String,
+        ) {
+            if (schema["type"] == JsonPrimitive("object")) {
+                require(schema["additionalProperties"] == JsonPrimitive(false)) {
+                    "$path must set additionalProperties to false"
+                }
+                val properties = (schema["properties"] as? JsonObject)?.keys.orEmpty()
+                val required =
+                    (schema["required"] as? JsonArray)
+                        ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
+                        ?.toSet()
+                        .orEmpty()
+                require(required == properties) { "$path must list every property in required" }
+            }
+            (schema["properties"] as? JsonObject)?.forEach { (name, sub) ->
+                (sub as? JsonObject)?.let { checkStrict(it, "$path.$name") }
+            }
+            (schema["items"] as? JsonObject)?.let { checkStrict(it, "$path[]") }
+            for (keyword in listOf("anyOf", "oneOf", "allOf")) {
+                (schema[keyword] as? JsonArray)?.forEachIndexed { i, sub ->
+                    (sub as? JsonObject)?.let { checkStrict(it, "$path.$keyword[$i]") }
+                }
+            }
+            (schema["\$defs"] as? JsonObject)?.forEach { (name, sub) ->
+                (sub as? JsonObject)?.let { checkStrict(it, "$path.\$defs.$name") }
+            }
+        }
     }
 }

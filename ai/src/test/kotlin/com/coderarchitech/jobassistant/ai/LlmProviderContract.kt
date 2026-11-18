@@ -90,7 +90,7 @@ abstract class LlmProviderContract {
             result as LlmResult.Success
             assertEquals(Verdict(score = 82, reason = "Kotlin and Compose match"), result.value)
             assertTrue("The model is not reported", result.model.isNotBlank())
-            assertTrue("No input tokens counted", result.usage.inputTokens > 0)
+            assertTrue("No input tokens counted", result.usage.totalInputTokens > 0)
             assertTrue("No output tokens counted", result.usage.outputTokens > 0)
         }
 
@@ -142,12 +142,17 @@ abstract class LlmProviderContract {
             assertTrue(provider(Scenario.UNREACHABLE).generate(request()) is LlmResult.NetworkError)
         }
 
-    /** The reply type the contract asks for. */
+    /** The reply type the contract asks for. Value limits live here, not in the schema. */
     @Serializable
     data class Verdict(
         val score: Int,
         val reason: String,
-    )
+    ) {
+        init {
+            require(score in 0..100) { "score must be 0-100" }
+            require(reason.length <= 140) { "reason must be at most 140 characters" }
+        }
+    }
 
     /** Shared values for the contract and its subclasses' fixtures. */
     companion object {
@@ -175,8 +180,8 @@ abstract class LlmProviderContract {
                           "additionalProperties": false,
                           "required": ["score", "reason"],
                           "properties": {
-                            "score": { "type": "integer", "minimum": 0, "maximum": 100 },
-                            "reason": { "type": "string", "maxLength": 140 }
+                            "score": { "type": "integer" },
+                            "reason": { "type": "string" }
                           }
                         }
                         """.trimIndent(),

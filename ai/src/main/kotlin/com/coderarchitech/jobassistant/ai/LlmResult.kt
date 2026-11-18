@@ -13,7 +13,10 @@ sealed interface LlmResult<out T> {
         val usage: TokenUsage,
         /** The model that answered, as the provider reported it. */
         val model: String,
-    ) : LlmResult<T>
+    ) : LlmResult<T> {
+        // The value can hold profile-derived text (a cover letter, a parsed resume); keep it out of logs.
+        override fun toString(): String = "Success(model=$model, usage=$usage)"
+    }
 
     /** Every outcome that is not a decoded value. */
     sealed interface Failure : LlmResult<Nothing>
@@ -78,21 +81,33 @@ enum class BlockReason {
     SECRET_IN_PROMPT,
 }
 
-/** Tokens one call used, as the provider reported them. Priced into a `UsageRecord` by T1.14. */
+/**
+ * Tokens one call used, split by how each kind is billed, so T1.14 can price them. The three input
+ * counts do not overlap. Providers normalize into this shape: Anthropic reports the three directly
+ * (`input_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`); OpenAI's
+ * `prompt_tokens` includes `cached_tokens`, so its uncached input is the difference.
+ */
 data class TokenUsage(
+    /** Input billed at the base rate (not read from or written to the cache). */
     val inputTokens: Long,
     val outputTokens: Long,
-    /** Input tokens read from the prompt cache; part of, not added to, [inputTokens]. */
-    val cachedInputTokens: Long = 0,
+    /** Input read from the prompt cache, billed below the base rate. */
+    val cacheReadInputTokens: Long = 0,
+    /** Input written to the prompt cache, billed above the base rate (Anthropic only). */
+    val cacheWriteInputTokens: Long = 0,
 ) {
     init {
-        require(inputTokens >= 0 && outputTokens >= 0 && cachedInputTokens >= 0) { "Token counts cannot be negative" }
-        require(cachedInputTokens <= inputTokens) { "Cached tokens cannot exceed input tokens" }
+        require(
+            inputTokens >= 0 && outputTokens >= 0 && cacheReadInputTokens >= 0 && cacheWriteInputTokens >= 0,
+        ) { "Token counts cannot be negative" }
     }
+
+    /** Every input token, however it was billed. */
+    val totalInputTokens: Long get() = inputTokens + cacheReadInputTokens + cacheWriteInputTokens
 
     /** Shared values. */
     companion object {
         /** No tokens; for calls that failed before the provider counted any. */
-        val NONE = TokenUsage(0, 0, 0)
+        val NONE = TokenUsage(0, 0)
     }
 }

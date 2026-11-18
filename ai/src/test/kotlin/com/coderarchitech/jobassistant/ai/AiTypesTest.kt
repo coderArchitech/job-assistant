@@ -37,8 +37,37 @@ class AiTypesTest {
 
     @Test
     fun decodeTurnsATypesOwnValidationIntoAMismatch() {
-        val schema = OutputSchema("usage", objectSchema(), TokenUsageJson.serializer())
-        assertTrue(schema.decode("""{"input":-1}""") is OutputSchema.Decoded.Mismatch)
+        // require() in Verdict: the schema has no numeric limits, the type does.
+        assertTrue(VERDICT_SCHEMA.decode("""{"score":150,"reason":"ok"}""") is OutputSchema.Decoded.Mismatch)
+        assertTrue(
+            VERDICT_SCHEMA.decode("""{"score":50,"reason":"${"x".repeat(141)}"}""") is OutputSchema.Decoded.Mismatch,
+        )
+        // check() in a type's init throws IllegalStateException; it must not escape decode.
+        val checked = OutputSchema("checked", inputSchema(), CheckedJson.serializer())
+        assertTrue(checked.decode("""{"input":-1}""") is OutputSchema.Decoded.Mismatch)
+    }
+
+    @Test
+    fun nestedObjectsMustBeStrictToo() {
+        val openNested =
+            """{"type":"object","additionalProperties":false,"required":["a"],
+               "properties":{"a":{"type":"object","properties":{"b":{"type":"string"}},"required":["b"]}}}"""
+        val optionalProperty =
+            """{"type":"object","additionalProperties":false,"required":[],
+               "properties":{"a":{"type":"string"}}}"""
+        val openArrayItem =
+            """{"type":"object","additionalProperties":false,"required":["a"],
+               "properties":{"a":{"type":"array","items":{"type":"object","properties":{}}}}}"""
+        for (schema in listOf(openNested, optionalProperty, openArrayItem)) {
+            assertThrows("Accepted $schema", IllegalArgumentException::class.java) {
+                OutputSchema("nested", json(schema), Verdict.serializer())
+            }
+        }
+        val strictNested =
+            """{"type":"object","additionalProperties":false,"required":["a"],
+               "properties":{"a":{"type":"array","items":{"type":"object","additionalProperties":false,
+               "required":["b"],"properties":{"b":{"type":"string"}}}}}}"""
+        OutputSchema("nested", json(strictNested), Verdict.serializer())
     }
 
     @Test
@@ -80,17 +109,30 @@ class AiTypesTest {
     }
 
     @Test
-    fun invalidOutputDoesNotPrintTheRawText() {
-        val result = LlmResult.InvalidOutput("""{"reason":"Example Person"}""", "missing score", TokenUsage.NONE)
-        assertFalse(result.toString().contains("Example Person"))
+    fun resultsDoNotPrintModelOutput() {
+        val invalid = LlmResult.InvalidOutput("""{"reason":"Example Person"}""", "missing score", TokenUsage.NONE)
+        assertFalse(invalid.toString().contains("Example Person"))
+        val success = LlmResult.Success(Verdict(80, "Example Person fits"), TokenUsage.NONE, "fake-small")
+        assertFalse(success.toString().contains("Example Person"))
     }
 
     @Test
-    fun tokenUsageRejectsImpossibleCounts() {
+    fun tokenUsageRejectsNegativeCounts() {
         assertThrows(IllegalArgumentException::class.java) { TokenUsage(-1, 0) }
         assertThrows(IllegalArgumentException::class.java) { TokenUsage(0, -1) }
-        assertThrows(IllegalArgumentException::class.java) { TokenUsage(10, 0, cachedInputTokens = 11) }
-        assertEquals(TokenUsage(10, 5, 10).cachedInputTokens, 10L)
+        assertThrows(IllegalArgumentException::class.java) { TokenUsage(0, 0, cacheReadInputTokens = -1) }
+        assertThrows(IllegalArgumentException::class.java) { TokenUsage(0, 0, cacheWriteInputTokens = -1) }
+    }
+
+    @Test
+    fun cachedInputCanExceedUncachedInput() {
+        // Anthropic: a run's later calls read a large cached prefix and send little new input.
+        val usage = TokenUsage(inputTokens = 50, outputTokens = 300, cacheReadInputTokens = 2_000)
+        assertEquals(2_050L, usage.totalInputTokens)
+        assertEquals(
+            3_100L,
+            TokenUsage(100, 0, cacheReadInputTokens = 0, cacheWriteInputTokens = 3_000).totalInputTokens,
+        )
     }
 
     @Test
@@ -101,15 +143,21 @@ class AiTypesTest {
     }
 
     @kotlinx.serialization.Serializable
-    private data class TokenUsageJson(
+    private data class CheckedJson(
         val input: Int,
     ) {
         init {
-            require(input >= 0) { "input must not be negative" }
+            check(input >= 0) { "input must not be negative" }
         }
     }
 
     private fun objectSchema(): JsonObject = json("""{"type":"object","additionalProperties":false}""")
+
+    private fun inputSchema(): JsonObject =
+        json(
+            """{"type":"object","additionalProperties":false,"required":["input"],
+               "properties":{"input":{"type":"integer"}}}""",
+        )
 
     private fun json(text: String): JsonObject = Json.parseToJsonElement(text) as JsonObject
 }
