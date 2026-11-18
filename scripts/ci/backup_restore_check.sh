@@ -69,10 +69,17 @@ as_app() { adb shell "run-as $app_id $*" </dev/null; }
 app_has() { as_app "ls $1" >/dev/null 2>&1; }
 
 # Copies a host file to a path in the app's data directory, byte for byte.
+# The bytes travel base64-encoded inside one `adb shell` command and are decoded on the device with
+# toybox base64 (Android 10+). Streaming stdin through `adb exec-in` into run-as failed on the CI
+# emulators (API 29 and 36), and its errors were lost; this way adb's output is shown on failure.
 plant() {
-  local src="$1" dest="$2"
-  adb exec-in "run-as $app_id sh -c 'mkdir -p $(dirname "$dest") && cat > $dest'" <"$src"
-  app_has "$dest" || fail "could not plant $dest"
+  local src="$1" dest="$2" dir encoded out
+  dir="$(dirname "$dest")"
+  encoded="$(base64 <"$src" | tr -d '\n')"
+  out="$(adb shell "run-as $app_id sh -c 'mkdir -p $dir && echo $encoded | base64 -d > $dest'" </dev/null 2>&1)" || true
+  app_has "$dest" || fail "could not plant $dest: ${out:-no output from adb}"
+  [[ "$(as_app "sh -c 'wc -c < $dest'" | tr -d '\r ')" == "$(wc -c <"$src" | tr -d ' ')" ]] ||
+    fail "planted $dest has the wrong size"
 }
 
 list_app_files() {
