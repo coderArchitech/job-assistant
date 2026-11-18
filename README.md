@@ -20,7 +20,7 @@ Job seekers spend hours every day repeating the same work across Naukri, Instahy
 | **Custom search context** | Free-form context (e.g. "no service companies, open to Bengaluru hybrid") shapes both search and scoring; saved search presets |
 | **Custom portals** | Add Naukri, Instahyre or any job portal with login URL and credentials; sessions are reused between runs |
 | **OTP auto-read** | Reads login OTPs from SMS through Google's SMS User Consent API (no `READ_SMS` permission) |
-| **Applying** | Fills portal forms automatically; "stop before submit" by default, optional auto-submit for High match; daily caps per portal |
+| **Applying** | Fills portal forms automatically; "stop before submit" by default, optional auto-submit for High match after 20 manual submissions on a portal; daily caps per portal |
 | **Recruiter outreach** | Sends tailored emails via your Gmail; drafts LinkedIn messages for you to send manually |
 | **Daily report** | Jobs found, matched, applied, emails sent, replies and AI cost — as a push notification, in-app report and optional email digest |
 | **Tracking** | Status pipeline per job (Found → Applied → Replied → Interview → Offer) with proof screenshots |
