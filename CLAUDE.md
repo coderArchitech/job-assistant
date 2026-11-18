@@ -31,6 +31,8 @@ Project hooks in `.claude/settings.json` run without anyone asking:
 
 People get the same pre-push check with `git config core.hooksPath .githooks`. Set `JOBASSISTANT_SKIP_PREPUSH=1` only in an emergency; CI runs the same checks anyway.
 
+On Windows the hook skips the `:core:data` and `:core:security` unit tests: DataStore cannot rename its temporary file over an existing one there, so those tests fail on Windows only. CI on Linux runs them on every PR.
+
 ## Stack
 
 Kotlin, Jetpack Compose with Material 3, single activity, MVVM, Hilt, coroutines and Flow, Room, Proto DataStore, WorkManager, OkHttp and kotlinx.serialization, Google Tink with Android Keystore, Android WebView with JavaScript adapters. `minSdk 29`, `targetSdk 36`, `compileSdk 37`. Versions are in `gradle/libs.versions.toml`; the toolchain table is in the design's "Modules" section.
