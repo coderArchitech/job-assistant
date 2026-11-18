@@ -9,6 +9,7 @@ import com.coderarchitech.jobassistant.core.data.settings.proto.SettingsProto
 import com.coderarchitech.jobassistant.core.model.AppSettings
 import com.google.protobuf.InvalidProtocolBufferException
 import kotlinx.coroutines.CoroutineScope
+import timber.log.Timber
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -45,7 +46,12 @@ internal fun createSettingsDataStore(
 ): DataStore<SettingsProto> =
     DataStoreFactory.create(
         serializer = SettingsSerializer,
-        corruptionHandler = ReplaceFileCorruptionHandler { SettingsSerializer.defaultValue },
+        corruptionHandler =
+            ReplaceFileCorruptionHandler {
+                // Not the exception: its message could quote file bytes.
+                Timber.w("settings.pb was unreadable; reset to the defaults")
+                SettingsSerializer.defaultValue
+            },
         scope = scope,
         produceFile = produceFile,
     )

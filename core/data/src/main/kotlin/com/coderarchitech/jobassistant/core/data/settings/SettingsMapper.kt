@@ -79,10 +79,11 @@ internal fun SettingsProto.toDomain(): AppSettings {
         thresholds = thresholds.toDomain(defaults.thresholds),
         defaultSchedule = defaultSchedule.toDomain(defaults.defaultSchedule),
         reportTime =
-            if (hasReportMinuteOfDay() && reportMinuteOfDay in 0 until MINUTES_PER_DAY) {
-                LocalTime.of(reportMinuteOfDay / MINUTES_PER_HOUR, reportMinuteOfDay % MINUTES_PER_HOUR)
-            } else {
-                defaults.reportTime
+            when {
+                !hasReportMinuteOfDay() -> defaults.reportTime
+                reportMinuteOfDay in 0 until MINUTES_PER_DAY ->
+                    LocalTime.of(reportMinuteOfDay / MINUTES_PER_HOUR, reportMinuteOfDay % MINUTES_PER_HOUR)
+                else -> defaults.reportTime.also { logFallback("reportTime") }
             },
         caps = caps.toDomain(defaults.caps),
         budget = budget.toDomain(defaults.budget),
@@ -92,7 +93,7 @@ internal fun SettingsProto.toDomain(): AppSettings {
 }
 
 private fun ThresholdsProto.toDomain(default: TierThresholds): TierThresholds =
-    validOrDefault(default) {
+    validOrDefault("thresholds", default) {
         TierThresholds(
             high = if (hasHigh()) high else default.high,
             partial = if (hasPartial()) partial else default.partial,
@@ -101,35 +102,66 @@ private fun ThresholdsProto.toDomain(default: TierThresholds): TierThresholds =
 
 private fun ScheduleProto.toDomain(default: RunSchedule): RunSchedule =
     RunSchedule(
-        interval = enumByName(interval, default.interval),
-        network = enumByName(network, default.network),
+        interval = enumByName("defaultSchedule.interval", interval, default.interval),
+        network = enumByName("defaultSchedule.network", network, default.network),
         chargingOnly = if (hasChargingOnly()) chargingOnly else default.chargingOnly,
     )
 
 private fun CapsProto.toDomain(default: Caps): Caps =
     Caps(
         overallDailyApplies =
-            nonNegativeOr(hasOverallDailyApplies(), overallDailyApplies, default.overallDailyApplies),
+            nonNegativeOr(
+                "caps.overallDailyApplies",
+                hasOverallDailyApplies(),
+                overallDailyApplies,
+                default.overallDailyApplies,
+            ),
         defaultPortalDailyApplies =
-            nonNegativeOr(hasDefaultPortalDailyApplies(), defaultPortalDailyApplies, default.defaultPortalDailyApplies),
-        dailyEmails = nonNegativeOr(hasDailyEmails(), dailyEmails, default.dailyEmails),
+            nonNegativeOr(
+                "caps.defaultPortalDailyApplies",
+                hasDefaultPortalDailyApplies(),
+                defaultPortalDailyApplies,
+                default.defaultPortalDailyApplies,
+            ),
+        dailyEmails = nonNegativeOr("caps.dailyEmails", hasDailyEmails(), dailyEmails, default.dailyEmails),
     )
 
 private fun BudgetProto.toDomain(default: Budget): Budget =
     Budget(
-        monthlyCapMicros = nonNegativeOr(hasMonthlyCapMicros(), monthlyCapMicros, default.monthlyCapMicros),
+        monthlyCapMicros =
+            nonNegativeOr(
+                "budget.monthlyCapMicros",
+                hasMonthlyCapMicros(),
+                monthlyCapMicros,
+                default.monthlyCapMicros,
+            ),
         browserAgentDailyMicros =
-            nonNegativeOr(hasBrowserAgentDailyMicros(), browserAgentDailyMicros, default.browserAgentDailyMicros),
+            nonNegativeOr(
+                "budget.browserAgentDailyMicros",
+                hasBrowserAgentDailyMicros(),
+                browserAgentDailyMicros,
+                default.browserAgentDailyMicros,
+            ),
     )
 
 private fun AiSettingsProto.toDomain(): AiSettings =
     AiSettings(
-        provider = if (hasProvider()) AiProvider.entries.firstOrNull { it.name == provider } else null,
+        provider =
+            if (hasProvider()) {
+                AiProvider.entries.firstOrNull { it.name == provider } ?: null.also { logFallback("ai.provider") }
+            } else {
+                null
+            },
         modelOverrides =
             modelOverridesMap
                 .mapNotNull { (taskName, model) ->
                     val task = AiTask.entries.firstOrNull { it.name == taskName }
-                    if (task == null || !AiSettings.isValidModelId(model)) null else task to model
+                    // Never log the model text: a key pasted into the wrong field is exactly what is dropped.
+                    if (task == null || !AiSettings.isValidModelId(model)) {
+                        null.also { logFallback("ai.modelOverrides") }
+                    } else {
+                        task to model
+                    }
                 }.toMap(),
     )
 

@@ -18,6 +18,7 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     // JSON columns (lists, maps and value types) go through kotlinx.serialization.
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.timber)
 
     testImplementation(libs.kotlinx.coroutines.test)
     // In-memory database tests run on Robolectric's SQLite.

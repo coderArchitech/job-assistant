@@ -1,6 +1,7 @@
 package com.coderarchitech.jobassistant.core.security.vault
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.coderarchitech.jobassistant.core.security.log.SecretRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -26,7 +27,7 @@ class TinkVaultDeviceSmokeTest {
     fun roundTripWithKeystoreKey() =
         runTest {
             val dataStore = createVaultDataStore(backgroundScope) { tmp.root.resolve("vault.pb") }
-            val vault = TinkVault(dataStore, kek, Dispatchers.IO)
+            val vault = TinkVault(dataStore, kek, Dispatchers.IO, SecretRegistry())
 
             assertEquals(VaultPut.Stored, vault.put(VaultSlot.portal(1), Secret("fake-password-1")))
 

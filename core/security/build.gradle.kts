@@ -11,6 +11,8 @@ dependencies {
     implementation(libs.androidx.datastore)
     implementation(libs.protobuf.javalite)
     implementation(libs.tink.android)
+    // api: RedactingTree is a Timber tree that :app plants.
+    api(libs.timber)
 
     testImplementation(libs.kotlinx.coroutines.test)
 }

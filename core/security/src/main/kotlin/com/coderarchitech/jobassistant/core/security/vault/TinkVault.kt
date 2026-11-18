@@ -2,6 +2,7 @@ package com.coderarchitech.jobassistant.core.security.vault
 
 import androidx.datastore.core.DataStore
 import com.coderarchitech.jobassistant.core.model.IoDispatcher
+import com.coderarchitech.jobassistant.core.security.log.SecretRegistry
 import com.coderarchitech.jobassistant.core.security.vault.proto.VaultProto
 import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KeysetHandle
@@ -28,6 +29,9 @@ import javax.inject.Singleton
  * A `vault.pb` written by a newer app version ([VaultProto.getSchemaVersion] above
  * [VAULT_SCHEMA_VERSION]) is never read or changed, only wiped. JVM tests build it directly with
  * a test [DataStore], a fake [KeyEncryptionKey] and a test dispatcher.
+ *
+ * Every value it stores or returns is added to [registry], and removed on delete or wipe, so the
+ * log redactor can strip it by exact match (T1.09).
  */
 @Singleton
 internal class TinkVault
@@ -36,6 +40,7 @@ internal class TinkVault
         private val dataStore: DataStore<VaultProto>,
         private val kek: KeyEncryptionKey,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+        private val registry: SecretRegistry,
     ) : Vault {
         private val mutex = Mutex()
 
@@ -60,6 +65,8 @@ internal class TinkVault
                 dataStore.updateData { current ->
                     current.toBuilder().putEntries(slot.name, ByteString.copyFrom(ciphertext)).build()
                 }
+                if (result is VaultPut.StoredAfterReset) result.lost.forEach { registry.unregister(it.name) }
+                registry.register(slot.name, secret)
                 result
             }
 
@@ -74,7 +81,7 @@ internal class TinkVault
                         val aead = valueAead ?: openExisting(vault)
                         if (aead == null) VaultRead.Unreadable else decrypt(aead, ciphertext, slot)
                     }
-                }
+                }.also { if (it is VaultRead.Found) registry.register(slot.name, it.secret) }
             }
 
         override suspend fun delete(slot: VaultSlot) =
@@ -87,7 +94,7 @@ internal class TinkVault
                         current
                     }
                 }
-                Unit
+                registry.unregister(slot.name)
             }
 
         override suspend fun slots(): Set<VaultSlot> =
@@ -102,6 +109,7 @@ internal class TinkVault
             locked {
                 valueAead = null
                 dataStore.updateData { VaultSerializer.defaultValue }
+                registry.clear()
                 keystore("Cannot delete the vault key") { kek.delete() }
             }
 
