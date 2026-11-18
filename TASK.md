@@ -105,7 +105,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   Tink AEAD (AES-256-GCM) with the keyset wrapped by an Android Keystore key (StrongBox where available). Ciphertexts stored in `vault.pb` (Proto DataStore), each bound to its slot name as associated data. API: `put`, `get`, `delete`, `wipe`.
   _Done when:_ round-trip tests pass on API 29 and 36, and a value copied to another slot fails to decrypt.
 
-- [ ] **T1.08 Configure backup exclusions** (P0) · Depends on T1.07
+- [x] **T1.08 Configure backup exclusions** (P0) · Depends on T1.07 · [#13](https://github.com/coderArchitech/job-assistant/pull/13)
   `dataExtractionRules` (API 31+) and `fullBackupContent` (API 29–30) exclude `vault.pb`, `app_webview/` and `files/proofs/`.
   _Note from T1.06:_ Decide whether `settings.pb` is backed up (D03); if it is, reset `autoSendEmails` to false after a restore. Exclude `datastore/vault.pb` by exact path, never the whole `datastore/` directory.
   _Note from T1.07:_ **Blocks wiring the vault into the app:** no PR may add `:core:security` to `:app` or a feature module before this lands, because Auto Backup would include `vault.pb` today.
