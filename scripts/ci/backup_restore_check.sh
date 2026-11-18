@@ -1,7 +1,19 @@
 #!/usr/bin/env bash
 # Task T1.08 "Done when" check (decision D03): a bmgr backup and restore on a connected emulator
-# or device brings back non-secret data and never the vault, WebView cookies or apply proofs, and
-# the restored settings have auto-send emails switched off.
+# or device brings back non-secret data (settings.pb included) and never the vault, WebView
+# cookies, apply proofs or the auto-send emails consent, which lives only in no_backup/ so a
+# restored install starts with auto-send off.
+#
+# What it exercises: on API 29-30 the backup uses res/xml/backup_rules.xml (fullBackupContent).
+# On API 31+ `bmgr backupnow` with the local transport is a cloud backup, so it applies the
+# <cloud-backup> section of res/xml/data_extraction_rules.xml; the <device-transfer> section is
+# not exercised on a device. BackupRulesTest in :app keeps the two sections identical.
+#
+# <cloud-backup> sets disableIfNoEncryptionCapabilities="true", and the local transport reports no
+# client-side encryption by default, so on API 31+ the backup would be skipped. The script sets the
+# local transport's test parameters (secure setting backup_local_transport_parameters:
+# fake_encryption_flag and is_encrypted) so it reports encryption, and puts the earlier value back
+# on exit. API 29-30 ignore them.
 #
 # Usage: scripts/ci/backup_restore_check.sh <applicationId>
 #   Run `./gradlew installDevDebug` first, for example:
@@ -9,8 +21,7 @@
 #   With several devices attached, pick one with ANDROID_SERIAL.
 #
 # It changes the device's backup settings (enables backup, selects the local transport) and clears
-# the app's data. Every planted file holds obviously fake values. The settings.pb fixtures are
-# generated and checked by BackupCheckFixturesTest in :core:data.
+# the app's data. Every planted file holds obviously fake values.
 set -euo pipefail
 
 if [[ $# -ne 1 || -z "$1" ]]; then
@@ -19,13 +30,20 @@ if [[ $# -ne 1 || -z "$1" ]]; then
 fi
 app_id="$1"
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-fixtures="$script_dir/fixtures"
-settings_on="$fixtures/settings-autosend-on.pb"
-settings_off="$fixtures/settings-autosend-off.pb"
-
 work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
+transport_params_key="backup_local_transport_parameters"
+transport_params_saved=""
+cleanup() {
+  if [[ -n "$transport_params_saved" ]]; then
+    if [[ "$transport_params_saved" == "null" ]]; then
+      adb shell settings delete secure "$transport_params_key" </dev/null >/dev/null 2>&1 || true
+    else
+      adb shell settings put secure "$transport_params_key" "'$transport_params_saved'" </dev/null >/dev/null 2>&1 || true
+    fi
+  fi
+  rm -rf "$work"
+}
+trap cleanup EXIT
 
 # Paths relative to the app's data directory (run-as starts there).
 keep_file="files/keep.txt"
@@ -34,6 +52,7 @@ vault_file="files/datastore/vault.pb"
 vault_tmp_file="files/datastore/vault.pb.tmp"
 cookies_file="app_webview/Default/Cookies"
 proof_file="files/proofs/proof1.png"
+consent_file="no_backup/auto_send_emails_consent"
 
 log() { printf '==> %s\n' "$*"; }
 fail() {
@@ -57,12 +76,9 @@ plant() {
 }
 
 list_app_files() {
-  as_app "find files app_webview databases -type f" 2>/dev/null | tr -d '\r' | sed 's/^/    /' || true
+  as_app "find files app_webview databases no_backup -type f" 2>/dev/null | tr -d '\r' | sed 's/^/    /' || true
 }
 
-for f in "$settings_on" "$settings_off"; do
-  [[ -f "$f" ]] || fail "missing fixture $f (see BackupCheckFixturesTest in :core:data)"
-done
 command -v adb >/dev/null || fail "adb is not on PATH"
 
 log "Waiting for the device"
@@ -88,6 +104,13 @@ enabled="$(dev bmgr enabled)"
 echo "$enabled"
 grep -q 'currently enabled' <<<"$enabled" || fail "backup manager is not enabled"
 
+# Make the local transport report client-side encryption (see the header).
+transport_params_saved="$(dev settings get secure "$transport_params_key")"
+[[ -n "$transport_params_saved" ]] || transport_params_saved="null"
+dev settings put secure "$transport_params_key" "fake_encryption_flag=true,is_encrypted=true"
+[[ "$(dev settings get secure "$transport_params_key")" == *fake_encryption_flag=true* ]] ||
+  fail "could not set $transport_params_key"
+
 transports="$(dev bmgr list transports)"
 echo "$transports"
 # The local transport is com.android.localtransport/.LocalTransport on current releases; older
@@ -100,7 +123,8 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 dev bmgr list transports | grep -q "^[[:space:]]*\*[[:space:]]*$transport" || fail "could not select $transport"
-# Drop data from earlier runs so the restore can only return what this run backed up.
+# Drop data from earlier runs, before this run's backup, so the transport holds exactly one
+# restore set for the app: the one this run writes.
 dev bmgr wipe "$transport" "$app_id" || true
 
 # The backup manager skips packages in the stopped state, which a fresh install is in until it is
@@ -113,29 +137,37 @@ sleep 2
 dev input keyevent KEYCODE_HOME
 sleep 1
 dev am kill "$app_id"
+app_alive() { [[ -n "$(dev pidof "$app_id" || true)" ]]; }
 for _ in $(seq 1 10); do
-  [[ -z "$(dev pidof "$app_id" || true)" ]] && break
+  app_alive || break
   sleep 1
 done
+# A live process could rewrite files after they are planted, so the check would not test the rules.
+app_alive && fail "$app_id is still running after am kill"
 
 log "Planting fixtures (fake values only)"
 printf 'control file: must survive backup and restore\n' >"$work/keep.txt"
 printf 'FAKE-VAULT-BYTES-not-a-secret\n' >"$work/vault.pb"
 printf 'FAKE-COOKIE-STORE-not-a-secret\n' >"$work/Cookies"
 printf 'FAKE-PROOF-not-an-image\n' >"$work/proof1.png"
+# Not a valid settings message: the check is only that the file is backed up.
+printf 'FAKE-SETTINGS-BYTES-not-a-secret\n' >"$work/settings.pb"
+# The marker is empty in the app; any content proves the same.
+printf 'FAKE-CONSENT-MARKER\n' >"$work/consent"
 plant "$work/keep.txt" "$keep_file"
-plant "$settings_on" "$settings_file"
+plant "$work/settings.pb" "$settings_file"
 plant "$work/vault.pb" "$vault_file"
 plant "$work/vault.pb" "$vault_tmp_file"
 plant "$work/Cookies" "$cookies_file"
 plant "$work/proof1.png" "$proof_file"
+plant "$work/consent" "$consent_file"
 echo "  Planted files:"
 list_app_files
 
 log "Backing up"
 backup_out="$(dev bmgr backupnow "$app_id")"
 echo "$backup_out"
-grep -q "Package $app_id with result: Success" <<<"$backup_out" || fail "backup of $app_id did not succeed"
+grep -q "Package $app_id with result: Success" <<<"$backup_out" || fail "backup of $app_id did not succeed (on API 31+, check that the transport reports encryption)"
 
 log "Clearing app data"
 dev pm clear "$app_id" | grep -q 'Success' || fail "pm clear $app_id failed"
@@ -145,11 +177,14 @@ log "Restoring"
 restore_out="$(dev bmgr restore "$app_id")"
 echo "$restore_out"
 if ! grep -q 'restoreFinished: 0' <<<"$restore_out"; then
-  # Some releases restore only from a named set: use the newest token the transport lists.
+  # Some releases restore only from a named set. The wipe before the backup leaves exactly one
+  # set; with more, picking one could restore data from another run, so stop instead.
   sets="$(dev bmgr list sets)"
   echo "$sets"
-  token="$(sed -n 's/^[[:space:]]*\([0-9a-fA-F][0-9a-fA-F]*\)[[:space:]]*:.*/\1/p' <<<"$sets" | head -n 1)"
-  [[ -n "$token" ]] || fail "restore of $app_id failed and no restore set is listed"
+  tokens="$(sed -n 's/^[[:space:]]*\([0-9a-fA-F][0-9a-fA-F]*\)[[:space:]]*:.*/\1/p' <<<"$sets")"
+  [[ -n "$tokens" ]] || fail "restore of $app_id failed and no restore set is listed"
+  [[ "$(wc -l <<<"$tokens")" -eq 1 ]] || fail "restore of $app_id failed and more than one restore set is listed"
+  token="$tokens"
   restore_out="$(dev bmgr restore "$token" "$app_id")"
   echo "$restore_out"
   grep -q 'restoreFinished: 0' <<<"$restore_out" || fail "restore of $app_id from set $token failed"
@@ -178,23 +213,7 @@ check "$vault_file not restored" absent "$vault_file"
 check "$vault_tmp_file not restored" absent "$vault_tmp_file"
 check "$cookies_file not restored" absent "$cookies_file"
 check "$proof_file not restored" absent "$proof_file"
-
-# The agent's onRestoreFinished rewrites settings.pb before the restore reports completion; poll a
-# little in case the device is slow to flush.
-settings_matches() {
-  local i
-  for i in $(seq 1 10); do
-    adb exec-out "run-as $app_id cat $settings_file" >"$work/restored-settings.pb" 2>/dev/null || true
-    cmp -s "$work/restored-settings.pb" "$settings_off" && return 0
-    [[ "$i" -lt 10 ]] && sleep 1
-  done
-  echo "    expected ($settings_off):"
-  od -An -tx1 "$settings_off" | sed 's/^/     /'
-  echo "    found:"
-  od -An -tx1 "$work/restored-settings.pb" | sed 's/^/     /'
-  return 1
-}
-check "settings.pb has auto-send emails off and every other setting unchanged" settings_matches
+check "$consent_file not restored (auto-send emails starts off)" absent "$consent_file"
 
 if [[ "$failures" -ne 0 ]]; then
   fail "$failures backup and restore check(s) failed on API $api"

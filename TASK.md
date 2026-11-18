@@ -534,7 +534,7 @@ Record each decision in the Technical Design's "Open technical questions" sectio
 | --- | --- | --- | --- |
 | D01 | Official AI SDKs or thin Retrofit clients. **Decided in [#7](https://github.com/coderArchitech/job-assistant/pull/7):** `anthropic-java` for Anthropic, thin OkHttp client for OpenAI, hand-written JSON schemas | Start of M1 | T1.12, T1.13 |
 | D02 | Encrypt the Room database with SQLCipher. **Decided 2026-11-18 (owner): no SQLCipher.** `agent.db` holds no secrets, and Android's file-based encryption already protects app storage at rest | End of M1 | T1.03 |
-| D03 | Cloud backup of non-secret data, or no backup. **Decided 2026-11-18 (owner): back up non-secret data** (`agent.db`, `settings.pb`); exclude `datastore/vault.pb`, `app_webview/` and `files/proofs/` by exact path; after a restore, switch auto-send emails off and ask for secrets again | End of M1 | T1.08 |
+| D03 | Cloud backup of non-secret data, or no backup. **Decided 2026-11-18 (owner): back up non-secret data** (`agent.db`, `settings.pb`); exclude `datastore/vault.pb`, `app_webview/` and `files/proofs/` by exact path; after a restore, auto-send is off (its consent is stored only in `no_backup/`) and secrets are asked for again. Follow-up (owner): cloud backup only when end-to-end encrypted (`disableIfNoEncryptionCapabilities="true"`) | End of M1 | T1.08 |
 | D04 | Foreground service type: `dataSync` or `specialUse` | Start of M3 | T3.22 |
 | D05 | On-device embedding model, bundled or downloaded, size budget | Start of M2 | T2.15 |
 | D06 | Request `gmail.readonly` for reply tracking and email OTP, or ship manual marking only | Start of M4 | T4.05 |

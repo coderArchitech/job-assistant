@@ -1,6 +1,7 @@
 package com.coderarchitech.jobassistant
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.w3c.dom.Element
@@ -66,12 +67,12 @@ class BackupRulesTest {
         for (section in sections) {
             assertOnlyExpectedExcludes(section.tagName, section)
         }
+        // Owner decision (D03 follow-up): cloud backup only when end-to-end encrypted.
         val cloud = sections.first { it.tagName == "cloud-backup" }
-        assertEquals(
-            "cloud-backup changes no default such as disableIfNoEncryptionCapabilities",
-            0,
-            cloud.attributes.length,
-        )
+        assertEquals("cloud-backup has exactly one attribute", 1, cloud.attributes.length)
+        assertEquals("true", cloud.getAttribute("disableIfNoEncryptionCapabilities"))
+        val transfer = sections.first { it.tagName == "device-transfer" }
+        assertEquals("device-transfer has no attribute", 0, transfer.attributes.length)
     }
 
     @Test
@@ -82,7 +83,7 @@ class BackupRulesTest {
     }
 
     @Test
-    fun manifestWiresBothRuleFilesAndTheRestoreAgent() {
+    fun manifestWiresBothRuleFilesAndUsesPlainAutoBackup() {
         val application = parse(MANIFEST).getElementsByTagName("application").item(0) as Element
 
         fun attr(name: String) = application.getAttributeNS(ANDROID_NS, name)
@@ -90,10 +91,10 @@ class BackupRulesTest {
         assertEquals("true", attr("allowBackup"))
         assertEquals("@xml/data_extraction_rules", attr("dataExtractionRules"))
         assertEquals("@xml/backup_rules", attr("fullBackupContent"))
-        assertEquals(".JobAssistantBackupAgent", attr("backupAgent"))
-        // Without fullBackupOnly a custom agent would switch the app to key/value backup.
-        assertEquals("true", attr("fullBackupOnly"))
-        assertEquals(JobAssistantBackupAgent::class.java.simpleName, attr("backupAgent").removePrefix("."))
+        // No custom agent: the auto-send consent lives in noBackupFilesDir, so nothing has to be
+        // rewritten after a restore, and a custom agent would only add ways for a restore to go wrong.
+        assertFalse("no backupAgent", application.hasAttributeNS(ANDROID_NS, "backupAgent"))
+        assertFalse("no fullBackupOnly", application.hasAttributeNS(ANDROID_NS, "fullBackupOnly"))
     }
 
     private companion object {

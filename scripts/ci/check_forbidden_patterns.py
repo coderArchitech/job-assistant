@@ -33,6 +33,13 @@ RULES: list[tuple[str, re.Pattern[str], re.Pattern[str] | None, str]] = [
      "No `!!` in production code; use safe calls, requireNotNull with a message, or a sealed result (CLAUDE.md)."),
     ("http-body-logging", re.compile(r"HttpLoggingInterceptor\.Level\.BODY"), re.compile(r"^(?!.*/src/debug/)"),
      "Request body logging is only allowed in debug source sets (CLAUDE.md rule 2)."),
+    ("webview-data-suffix", re.compile(r"\bsetDataDirectorySuffix\s*\("), re.compile(r"\.kts?$"),
+     "Moving WebView data out of app_webview/ would put cookies in backups; the exclude is by exact path"
+     " in app/src/main/res/xml/backup_rules.xml and data_extraction_rules.xml (task T1.08)."),
+    ("external-files", re.compile(r"\b(getExternalFilesDirs?|externalCacheDirs?|getExternalCacheDirs?)\b"),
+     re.compile(r"/src/main/.*\.kts?$"),
+     "Auto Backup includes the external domain, which app/src/main/res/xml/backup_rules.xml and"
+     " data_extraction_rules.xml do not exclude; keep app data in internal storage (task T1.08)."),
 ]
 
 SKIP_SUFFIXES = {".md", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".pdf", ".jar", ".zip"}

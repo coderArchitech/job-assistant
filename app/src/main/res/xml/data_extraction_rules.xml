@@ -7,9 +7,13 @@
       DataStore writes during each vault update (ciphertext only, but still the vault)
     - app_webview/: WebView cookies, local storage and IndexedDB
     - files/proofs/: apply proofs saved after each application
+    <cloud-backup disableIfNoEncryptionCapabilities="true">: owner decision (D03 follow-up): the
+    non-secret personal data (job history, settings) goes to a cloud backup only when it is
+    end-to-end encrypted, so no cloud backup is made on a device without a screen lock. Device
+    transfer has no such attribute. backup_rules.xml (API 29-30) has no equivalent.
 -->
 <data-extraction-rules>
-    <cloud-backup>
+    <cloud-backup disableIfNoEncryptionCapabilities="true">
         <exclude domain="file" path="datastore/vault.pb" />
         <exclude domain="file" path="datastore/vault.pb.tmp" />
         <exclude domain="root" path="app_webview/" />
