@@ -1,7 +1,5 @@
 package com.coderarchitech.jobassistant.core.security.vault
 
-import android.os.Build
-import android.security.keystore.KeyPermanentlyInvalidatedException
 import androidx.datastore.core.DataStore
 import com.coderarchitech.jobassistant.core.model.IoDispatcher
 import com.coderarchitech.jobassistant.core.security.vault.proto.VaultProto
@@ -18,7 +16,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.nio.charset.CharacterCodingException
 import java.security.GeneralSecurityException
-import java.security.KeyStoreException
 import java.security.ProviderException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,8 +25,9 @@ import javax.inject.Singleton
  *
  * The keyset is created on the first [put] and kept in memory once unwrapped. Every operation
  * holds [mutex], so a keyset is never created twice and a [wipe] never interleaves with a write.
- * JVM tests build it directly with a test [DataStore], a fake [KeyEncryptionKey] and a test
- * dispatcher.
+ * A `vault.pb` written by a newer app version ([VaultProto.getSchemaVersion] above
+ * [VAULT_SCHEMA_VERSION]) is never read or changed, only wiped. JVM tests build it directly with
+ * a test [DataStore], a fake [KeyEncryptionKey] and a test dispatcher.
  */
 @Singleton
 internal class TinkVault
@@ -49,6 +47,7 @@ internal class TinkVault
             secret: Secret,
         ): VaultPut =
             locked {
+                requireKnownSchema(dataStore.data.first())
                 val cached = valueAead
                 val (aead, result) = if (cached != null) cached to VaultPut.Stored else openOrCreateKeyset(slot)
                 val plaintext = secret.encodeUtf8()
@@ -67,6 +66,7 @@ internal class TinkVault
         override suspend fun get(slot: VaultSlot): VaultRead =
             locked {
                 val vault = dataStore.data.first()
+                requireKnownSchema(vault)
                 val ciphertext = vault.entriesMap[slot.name]
                 when {
                     ciphertext == null -> VaultRead.Missing
@@ -80,6 +80,7 @@ internal class TinkVault
         override suspend fun delete(slot: VaultSlot) =
             locked {
                 dataStore.updateData { current ->
+                    requireKnownSchema(current)
                     if (current.containsEntries(slot.name)) {
                         current.toBuilder().removeEntries(slot.name).build()
                     } else {
@@ -165,7 +166,7 @@ internal class TinkVault
             dataStore.updateData { current ->
                 current
                     .toBuilder()
-                    .setSchemaVersion(SCHEMA_VERSION)
+                    .setSchemaVersion(VAULT_SCHEMA_VERSION)
                     .setEncryptedKeyset(ByteString.copyFrom(wrapped))
                     .build()
             }
@@ -174,7 +175,22 @@ internal class TinkVault
         }
     }
 
-private const val SCHEMA_VERSION = 1
+/**
+ * Format version this code writes and reads. A stored 0 is an empty file. Raise it with every
+ * format change (see vault.proto).
+ */
+internal const val VAULT_SCHEMA_VERSION = 1
+
+/**
+ * Refuses a vault written by a newer app version, whose format this code may misread or damage.
+ *
+ * @throws VaultException when [vault] has a newer schema version.
+ */
+private fun requireKnownSchema(vault: VaultProto) {
+    if (vault.schemaVersion > VAULT_SCHEMA_VERSION) {
+        throw VaultException("The vault was written by a newer app version; update the app or wipe the vault")
+    }
+}
 
 /** Tink's AEAD configuration for keyset generation, parsing and primitives; no global registry. */
 private val TINK_CONFIG = AeadConfig2026.get()
@@ -240,30 +256,6 @@ private inline fun <T> keystore(
 
 private fun Exception.toVaultException(message: String) =
     VaultException(if (isTransientKeystoreFailure()) KEYSTORE_UNREACHABLE else message, this)
-
-/**
- * True when this failure (or one of its causes) says the Keystore could not be reached or failed
- * internally, which may pass on a retry: a [ProviderException], a [KeyStoreException], or on API
- * 33+ a transient or system-error `android.security.KeyStoreException`. A permanently invalidated
- * key is never transient: that key is lost. Cryptographic failures such as a bad tag are not
- * transient either: they prove the data cannot be decrypted.
- */
-internal fun Throwable.isTransientKeystoreFailure(): Boolean {
-    val chain = generateSequence(this) { it.cause }.take(MAX_CAUSE_DEPTH).toList()
-    return chain.none { it is KeyPermanentlyInvalidatedException } && chain.any { it.isKeystoreFault() }
-}
-
-private fun Throwable.isKeystoreFault(): Boolean =
-    this is ProviderException ||
-        this is KeyStoreException ||
-        (
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                this is android.security.KeyStoreException &&
-                (isTransientFailure || isSystemError)
-        )
-
-/** Bounds the cause walk, so a cyclic cause chain cannot loop forever. */
-private const val MAX_CAUSE_DEPTH = 8
 
 /** Associated data that binds a ciphertext to its slot, so it fails to decrypt anywhere else. */
 internal fun VaultSlot.associatedData(): ByteArray = ("jobassistant/vault/v1|slot|$name").toByteArray(Charsets.UTF_8)

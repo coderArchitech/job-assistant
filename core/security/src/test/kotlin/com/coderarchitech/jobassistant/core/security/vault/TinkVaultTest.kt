@@ -531,6 +531,100 @@ class TinkVaultTest {
         }
     }
 
+    @Test
+    fun aVaultFromANewerAppVersionIsNeverReadOrChangedButCanBeWiped() =
+        runTest {
+            for (restart in listOf(false, true)) {
+                val first = open()
+                first.vault.wipe()
+                first.vault.put(portalA, Secret("fake-password-1"))
+                first.rewrite { schemaVersion = VAULT_SCHEMA_VERSION + 1 }
+                // With a restart the keyset is not cached; without one it is.
+                val store =
+                    if (restart) {
+                        first.close()
+                        open()
+                    } else {
+                        first
+                    }
+                val before = store.stored()
+                val creates = kek.createCount
+
+                val attempts =
+                    mapOf<String, suspend () -> Unit>(
+                        "get" to { store.vault.get(portalA) },
+                        "get of an empty slot" to { store.vault.get(portalB) },
+                        "put" to { store.vault.put(portalB, Secret("fake-password-2")) },
+                        "put over a value" to { store.vault.put(portalA, Secret("fake-password-2")) },
+                        "delete" to { store.vault.delete(portalA) },
+                    )
+                for ((name, attempt) in attempts) {
+                    val thrown = assertThrowsVaultException { attempt() }
+                    assertTrue(
+                        "restart=$restart $name: says why",
+                        thrown.message.orEmpty().contains("newer app version"),
+                    )
+                    assertEquals("restart=$restart $name: file unchanged", before, store.stored())
+                }
+                assertEquals("restart=$restart: no new key", creates, kek.createCount)
+
+                store.vault.wipe()
+                assertEquals("restart=$restart: wiped", VaultProto.getDefaultInstance(), store.stored())
+                assertEquals(VaultPut.Stored, store.vault.put(portalB, Secret("fake-password-2")))
+                assertEquals(found("fake-password-2"), store.vault.get(portalB))
+                assertEquals(VAULT_SCHEMA_VERSION, store.stored().schemaVersion)
+                store.close()
+            }
+        }
+
+    @Test
+    fun aStoredSchemaVersionOfZeroOrTheCurrentOneIsRead() =
+        runTest {
+            for (version in listOf(0, VAULT_SCHEMA_VERSION)) {
+                val first = open()
+                first.vault.wipe()
+                first.vault.put(portalA, Secret("fake-password-1"))
+                first.rewrite { schemaVersion = version }
+                first.close()
+
+                val second = open()
+                assertEquals("v$version", found("fake-password-1"), second.vault.get(portalA))
+                assertEquals("v$version", VaultPut.Stored, second.vault.put(portalB, Secret("fake-password-2")))
+                second.vault.delete(portalA)
+                assertEquals("v$version", setOf(portalB), second.vault.slots())
+                second.close()
+            }
+        }
+
+    @Test
+    fun aPlatformKeystoreVerdictDecidesAloneWhateverWrapsIt() {
+        // Stands in for android.security.KeyStoreException, which the JVM cannot build.
+        class FakePlatformFailure(
+            val transient: Boolean,
+        ) : Exception("fake")
+
+        val verdict: (Throwable) -> Boolean? = { (it as? FakePlatformFailure)?.transient }
+        val cases =
+            listOf(
+                "transient alone" to FakePlatformFailure(true) to true,
+                "permanent alone" to FakePlatformFailure(false) to false,
+                "permanent in a ProviderException" to ProviderException("fake", FakePlatformFailure(false)) to false,
+                "permanent in a KeyStoreException" to KeyStoreException("fake", FakePlatformFailure(false)) to false,
+                "transient in a ProviderException" to ProviderException("fake", FakePlatformFailure(true)) to true,
+                "transient in a GeneralSecurityException" to
+                    GeneralSecurityException("fake", FakePlatformFailure(true)) to true,
+                "outermost platform failure wins" to
+                    ProviderException("fake", FakePlatformFailure(false).initCause(FakePlatformFailure(true))) to false,
+                "no platform failure: ProviderException" to ProviderException("fake") to true,
+                "no platform failure: KeyStoreException" to KeyStoreException("fake") to true,
+                "no platform failure: bad tag" to AEADBadTagException("fake") to false,
+            )
+        for ((case, transient) in cases) {
+            val (name, failure) = case
+            assertEquals(name, transient, failure.isTransientKeystoreFailure(verdict))
+        }
+    }
+
     private suspend fun assertThrowsVaultException(block: suspend () -> Unit): VaultException {
         try {
             block()

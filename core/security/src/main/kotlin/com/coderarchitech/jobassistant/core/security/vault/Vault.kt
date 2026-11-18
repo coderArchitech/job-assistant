@@ -14,6 +14,8 @@ package com.coderarchitech.jobassistant.core.security.vault
  *   Nothing was lost; retry later. (From [put] it can also mean the key material is unusable; see
  *   there.)
  * - [java.io.IOException]: `vault.pb` could not be read or written. Nothing was lost; retry later.
+ * - [VaultException] from [put], [get] or [delete] when `vault.pb` was written by a newer app
+ *   version: nothing is read or changed. Update the app, or [wipe] the vault.
  */
 interface Vault {
     /**
@@ -61,7 +63,7 @@ interface Vault {
 
 /** Result of [Vault.get]. */
 sealed interface VaultRead {
-    /** The slot holds [secret]. */
+    /** The slot holds [secret]; the caller owns it and closes it once done with the value. */
     data class Found(
         val secret: Secret,
     ) : VaultRead
@@ -93,8 +95,8 @@ sealed interface VaultPut {
 }
 
 /**
- * The Keystore could not be reached (retry later), or, from [Vault.put], the vault's key material
- * is unusable. See [Vault].
+ * The Keystore could not be reached (retry later), `vault.pb` was written by a newer app version,
+ * or, from [Vault.put], the vault's key material is unusable. See [Vault].
  */
 class VaultException(
     message: String,
