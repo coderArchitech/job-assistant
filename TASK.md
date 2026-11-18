@@ -122,21 +122,24 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   OkHttp clients per destination group (AI, job sources, Google, config host), shared kotlinx.serialization config, retry with exponential backoff and jitter that honors `retry-after`, and a network security config with cleartext disabled.
   _Done when:_ MockWebServer tests cover retries on 429, 529 and 5xx and no retry on other 4xx.
 
-- [ ] **T1.11 Define the AI interfaces** (P0) · Depends on T1.02
+- [x] **T1.11 Define the AI interfaces** (P0) · Depends on T1.02 · [#18](https://github.com/coderArchitech/job-assistant/pull/18)
   `LlmProvider`, `LlmRequest<T>`, `LlmResult<T>`, `OutputSchema<T>`, `Embedder` and the `AiTask` enum, as in the design.
   _Done when:_ a fake provider passes a contract test suite that both real providers will also run.
 
 - [ ] **T1.12 Implement the Anthropic provider** (P0) · Depends on T1.01, T1.10, T1.11
   Official `anthropic-java` SDK (D01). Messages API with structured outputs (`output_config.format`) from a hand-written JSON Schema, never the class-derived overload; `GET /v1/models` for the key check and model list; prompt caching on the stable prefix; `stop_reason` handling, including `refusal`; no sampling parameters sent; usage (including cached tokens) mapped to `UsageRecord`.
+  _Note from T1.11:_ Extend `LlmProviderContract` (`:ai` tests) and serve each `Scenario` from MockWebServer. Map `input_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens` straight into `TokenUsage`. Check whether structured outputs accept value keywords such as `minimum` and `maxLength`; the design keeps those limits in the Kotlin type.
   _Done when:_ the contract suite passes against recorded fixtures, and one live smoke test passes with a real key.
 
 - [ ] **T1.13 Implement the OpenAI provider** (P0) · Depends on T1.01, T1.10, T1.11
   Thin client on OkHttp and kotlinx.serialization (D01). Structured Outputs with a strict JSON schema, `GET /v1/models` filtered by the remote allowlist, embeddings endpoint, and refusal and `finish_reason` handling.
+  _Note from T1.11:_ Extend `LlmProviderContract` (`:ai` tests). OpenAI's `prompt_tokens` includes `cached_tokens`: set `TokenUsage.inputTokens` to the difference and `cacheReadInputTokens` to `cached_tokens`.
   _Done when:_ the contract suite passes against recorded fixtures, and one live smoke test passes with a real key.
 
 - [ ] **T1.14 Add usage metering and the budget guard** (P0) · Depends on T1.03, T1.11
   Write a `UsageRecord` for every call, priced from the price table. Before each call, refuse it if month-to-date spend plus a worst-case estimate would exceed the cap; then pause the agent and show the reason on Home.
   _Note from T1.06:_ Fail closed: if `SettingsRepository.settings` fails (it does after repeated I/O errors), pause AI calls rather than assume a budget.
+  _Note from T1.11:_ `TokenUsage` splits input into uncached, cache-read and cache-write tokens (cache writes cost more than base input on Anthropic). `UsageRecord` in `:core:model` has only `cachedTokens`, so add a cache-write count before pricing. Return `LlmResult.Blocked(BUDGET_EXCEEDED)` for a refused call. `FakeLlmProvider` and `LlmProviderContract` sit in `:ai` tests; move them to a shared test-fixtures source set if the guard's tests live outside `:ai`.
   _Done when:_ a test with a $1 cap refuses the call that would cross it.
 
 - [ ] **T1.15 Add the prompt guard** (P0) · Depends on T1.07, T1.11
@@ -150,8 +153,9 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   On-device text extraction from PDF and DOCX; AI structuring into skills, experience, education and roles; a confirm-and-edit screen; preferences, deal-breakers, answers bank and writing samples. `Profile.version` increments on every edit.
   _Done when:_ three sample resumes produce profiles a user can confirm without retyping more than one field each.
 
-- [ ] **T1.17 Build the app shell and onboarding skeleton** (P0) · Depends on T0.03, T1.06
+- [ ] **T1.17 Build the app shell and onboarding skeleton** (P0) · Depends on T0.03, T1.06, T1.12, T1.13
   Navigation graph, bottom navigation (Home, Jobs, Review, Portals, Settings), light and dark themes, and onboarding steps 1–4: consent, resume, preferences and context, AI provider (key entry, "Validate key", model picker per task with defaults). Edge-to-edge insets handled on every screen.
+  _Note (owner, 2026-11-18):_ Depends on T1.12 and T1.13 because its Done when validates a real key, which needs a provider.
   _Done when:_ a new install reaches Home after validating a key on either provider.
 
 **M1 gate:** keys validate on both providers; a resume becomes a confirmed profile; D01 is decided.
