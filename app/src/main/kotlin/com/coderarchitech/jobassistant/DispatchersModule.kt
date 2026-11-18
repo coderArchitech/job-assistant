@@ -1,4 +1,4 @@
-package com.coderarchitech.jobassistant.core.data
+package com.coderarchitech.jobassistant
 
 import com.coderarchitech.jobassistant.core.model.IoDispatcher
 import dagger.Module
@@ -8,10 +8,13 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 
-/** Provides the app's coroutine dispatchers. */
+/**
+ * Provides the app's coroutine dispatchers. It lives in `:app`, which sees every module, because
+ * several library modules (`:core:data`, `:core:security`) inject [IoDispatcher].
+ */
 @Module
 @InstallIn(SingletonComponent::class)
-internal object DispatchersModule {
+object DispatchersModule {
     @Provides
     @IoDispatcher
     fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO

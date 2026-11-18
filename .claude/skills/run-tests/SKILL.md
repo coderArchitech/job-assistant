@@ -19,6 +19,8 @@ Run `git diff --name-only origin/main...HEAD` plus uncommitted changes, and map 
 | Room entities or schema JSON | `./gradlew :core:data:unitTest` (includes migration tests) |
 | `:feature:*` or `:core:ui` | That module's `unitTest`; Compose UI and screenshot tests arrive with T5.10 |
 | `:portals` Kotlin | `./gradlew :portals:connectedDebugAndroidTest` (needs an emulator or device) |
+| `:core:security` (vault) | `./gradlew :core:security:testDebugUnitTest`; on a device `./gradlew :core:security:connectedDebugAndroidTest` |
+| Every device test | `./gradlew deviceTest` (what CI runs on API 29, 34 and 36) |
 | `portals/scripts/**` | `npm --prefix portals/scripts test` (Playwright; exists from task T3.11) |
 | Prompts or default models | The golden-set script; report tier agreement and cost per job |
 | Docs, `TASK.md` or CI scripts | `python3 scripts/ci/check_md_links.py`, `python3 scripts/ci/check_task_md.py`, `python3 scripts/ci/check_forbidden_patterns.py` |

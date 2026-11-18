@@ -1,0 +1,22 @@
+// The credential vault (`vault.pb`): ciphertexts only, never a plaintext secret.
+//
+// - encrypted_keyset is the Tink AES-256-GCM keyset, itself encrypted by an Android Keystore key
+//   (TinkProtoKeysetFormat.serializeEncryptedKeyset). Empty until the first put.
+// - entries maps a slot name (for example "portal/12" or "ai/anthropic") to a Tink AEAD ciphertext
+//   whose associated data is bound to that slot name, so a value copied to another slot fails to
+//   decrypt.
+// - schema_version is 1 (0 in an empty file). Any change to the format or to how a field is read
+//   must raise it (TinkVault's VAULT_SCHEMA_VERSION); an older app then refuses the file instead of
+//   misreading it. Never reuse or renumber a field.
+syntax = "proto3";
+
+package jobassistant.vault;
+
+option java_package = "com.coderarchitech.jobassistant.core.security.vault.proto";
+option java_multiple_files = true;
+
+message VaultProto {
+  bytes encrypted_keyset = 1;
+  map<string, bytes> entries = 2;
+  int32 schema_version = 3;
+}

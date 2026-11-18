@@ -6,7 +6,7 @@ import org.gradle.kotlin.dsl.dependencies
 
 /**
  * Android library module: namespace from the Gradle path, SDK levels, strict lint, static analysis,
- * and the `unitTest` and `staticChecks` aggregate tasks.
+ * instrumented-test dependencies, and the `unitTest`, `staticChecks` and `deviceTest` aggregate tasks.
  */
 class AndroidLibraryConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) {
@@ -35,6 +35,9 @@ class AndroidLibraryConventionPlugin : Plugin<Project> {
 
             dependencies {
                 add("testImplementation", libs.library("junit4"))
+                add("androidTestImplementation", libs.library("androidx-test-runner"))
+                add("androidTestImplementation", libs.library("androidx-test-ext-junit"))
+                add("androidTestImplementation", libs.library("kotlinx-coroutines-test"))
             }
 
             tasks.register("unitTest") {
@@ -46,6 +49,12 @@ class AndroidLibraryConventionPlugin : Plugin<Project> {
                 group = "verification"
                 description = "Runs Android Lint, detekt and ktlint for this module."
                 dependsOn("lintDebug", "detekt", "ktlintCheck")
+            }
+            tasks.register("deviceTest") {
+                group = "verification"
+                description = "Runs this module's instrumented tests on a connected device or emulator."
+                // Without instrumented tests there is nothing to install; skip the device round trip.
+                if (file("src/androidTest").exists()) dependsOn("connectedDebugAndroidTest")
             }
         }
     }

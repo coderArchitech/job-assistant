@@ -421,6 +421,29 @@ The app's most valuable assets are portal passwords, session cookies and a paid 
 - Ciphertexts live in a Proto DataStore file (`vault.pb`), each bound to its slot name as associated data so a value cannot be moved to another slot. Jetpack Security's `EncryptedSharedPreferences` is not used because that library is deprecated.
 - Background runs must decrypt credentials with no user present, so the Keystore key cannot require user authentication. The optional biometric lock is therefore a UI gate (app open, viewing credentials) and the cryptographic protection is the Keystore key being non-exportable.
 
+**Vault implementation** (`:core:security`, task T1.07)
+
+- **Layout.** `files/datastore/vault.pb` holds the Tink keyset, encrypted by the Keystore key, and a map from slot name to ciphertext. Keeping both in one file means "Delete all data" clears one file and one Keystore alias. Slots are named `portal/<id>` and `ai/<provider>`, from `[a-z0-9_/-]`.
+- **Keys.** The Keystore key is AES-256-GCM, with randomized encryption and no user authentication. It is created in StrongBox when available; if StrongBox fails for any reason, the regular Keystore is used. Tink and the Keystore choose every IV; the app never supplies one.
+- **Associated data.** Each value is bound to `jobassistant/vault/v1|slot|<name>` and the keyset to `jobassistant/vault/v1|keyset`. A value copied into another slot, or a tampered byte, fails to decrypt.
+- **API.** `Vault`:
+  - `put(slot, secret)` returns `Stored`, or `StoredAfterReset(lost)` when the old key was gone and the listed secrets had to be dropped, so the app can ask for them again.
+  - `get(slot)` returns `Found`, `Missing` or `Unreadable`.
+  - `delete(slot)`, `slots()` and `wipe()`.
+- **Secrets in memory.** `Secret` holds a `CharArray` that `close()` zeroes. `useChars` lends a copy that is zeroed afterwards. `toString()` prints `Secret(****)`. `reveal()` returns a `String` that can never be zeroed, so callers must opt in with `@RevealsSecret`. The vault never logs anything.
+- **Failures.**
+  - `Unreadable` is permanent: the data cannot be decrypted, so the user re-enters the secret.
+  - `VaultException` means retry later: the Keystore was busy, or a file written by a newer app version is left untouched.
+  - `IOException` means a disk problem; retry.
+  - When the Keystore key exists but cannot unwrap the keyset (tampering or a Keystore fault), `put` fails and changes nothing. Only `wipe()` resets the vault.
+  - A missing key means the old values are unreadable anyway, so the next `put` starts a new vault and reports what was lost.
+  - A corrupt file reads as an empty vault.
+- **Accepted limits.**
+  - Someone who can write the app's private files (root, or a same-install backup restore) can put back an older ciphertext for a slot, or delete entries, without detection. They can never read or move a secret.
+  - The vault is single-process; a component that moves to its own `android:process` needs `MultiProcessDataStoreFactory` first.
+  - `:app` must not depend on `:core:security` until T1.08 excludes `datastore/vault.pb` from backups.
+- **Tests.** JVM tests run against a fake key. Device tests run against the real Keystore on API 29, 34 and 36 through `./gradlew deviceTest`, which runs the instrumented tests of `:app` and of every library module that has `src/androidTest`.
+
 | Threat | Asset | Control |
 | --- | --- | --- |
 | Device backup restored elsewhere | Vault, cookies, proofs | `dataExtractionRules` (API 31+) and `fullBackupContent` (API 29–30) exclude `vault.pb`, `app_webview/` and `files/proofs/`; Keystore keys never leave the device anyway |
@@ -432,7 +455,7 @@ The app's most valuable assets are portal passwords, session cookies and a paid 
 | Network interception | API key, credentials | HTTPS only (`cleartextTrafficPermitted=false`), system trust store, no user-installed CAs in release |
 | Lost or shared phone | Everything | Optional biometric or device-PIN lock; "Delete all data" |
 
-**Delete all data** runs in one coroutine: cancel all WorkManager work → delete the Room database → delete `vault.pb` and the Keystore aliases → clear cookies, web storage and WebView profiles → delete resume, proofs and caches → revoke Google authorization → clear DataStore → restart into onboarding.
+**Delete all data** runs in one coroutine: cancel all WorkManager work → delete the Room database → call `Vault.wipe()` (which empties `vault.pb` and deletes the Keystore alias; deleting the file directly is not enough, because the running vault would write its cached keyset back) → clear cookies, web storage and WebView profiles → delete resume, proofs and caches → revoke Google authorization → clear DataStore → restart into onboarding.
 
 **Data that leaves the device.** Job descriptions and profile text go to the user's AI provider under the user's own account; credentials go only to their own portal during login; email goes through the user's Gmail. The static config host serves signed scripts and the price table, and requests to it carry no user identifiers.
 
@@ -527,8 +550,8 @@ Two tasks have outside lead times and should start early: Gmail OAuth verificati
 These need a decision before the milestone named; the PRD's product questions (cloud runner, auto-submit timing, pricing) are not repeated here.
 
 1. ~~**SDKs or thin clients**~~ **Decided (D01, T1.01):** official SDK for Anthropic, thin OkHttp client for OpenAI, hand-written JSON schemas for both. See "Client libraries" under AI provider layer.
-2. **Encrypt the database?** (end of foundation): Room holds CTC, notice period and job history but no secrets. SQLCipher adds protection at a cost in APK size and startup time.
-3. **Cloud backup of non-secret data** (end of foundation): back up Room and settings so a new phone keeps history, or disable backup entirely for simplicity?
+2. **Encrypt the database?** (end of foundation): Room holds CTC, notice period and job history but no secrets. SQLCipher adds protection at a cost in APK size and startup time. **Decided (D02): no SQLCipher.** Secrets live only in the vault, and Android's file-based encryption protects app-private storage at rest on every supported version.
+3. **Cloud backup of non-secret data** (end of foundation): back up Room and settings so a new phone keeps history, or disable backup entirely for simplicity? **Decided (D03): back up non-secret data.** Room and settings are included so a new phone keeps history and preferences; the vault, WebView data and proofs are excluded by exact path; after a restore, auto-send emails is switched off and the user re-enters secrets.
 4. **Foreground service type** (start of portals and applying): `dataSync` or `specialUse` for the apply session, given Play's declaration review?
 5. **On-device embedder** (start of discovery and scoring): which model, bundled or downloaded on first use, and its size budget?
 6. **Reply tracking scope** (start of outreach and reporting): request `gmail.readonly` at launch, after confirming with Google which review applies to on-device-only access, or ship manual reply marking first?
