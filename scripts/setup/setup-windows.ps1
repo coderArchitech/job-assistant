@@ -35,14 +35,16 @@ $ProgressPreference = 'SilentlyContinue'   # Invoke-WebRequest is very slow with
 $RepoUrl = 'https://github.com/coderArchitech/job-assistant.git'
 $CmdlineToolsZip = 'commandlinetools-win-16111833_latest.zip'
 $CmdlineToolsSha1 = '57d04f2d75eb8e8fffc5000a987e5de4b5a63e9d'
+# Command-line tools 23+ install through the Android CLI (android.exe), which names packages with
+# '/'. avdmanager still takes the older ';' form.
 $SystemImage = 'system-images;android-36;google_apis;x86_64'
 $SdkPackages = @(
     'platform-tools',
-    'platforms;android-37.0',
-    'platforms;android-36',
-    'build-tools;36.0.0',
+    'platforms/android-37.0',
+    'platforms/android-36',
+    'build-tools/36.0.0',
     'emulator',
-    $SystemImage
+    $SystemImage.Replace(';', '/')
 )
 $AvdName = 'JobAssistant_API36'
 $AppId = 'com.coderarchitech.jobassistant.dev'
@@ -122,8 +124,8 @@ $env:ANDROID_HOME = $Sdk
 [Environment]::SetEnvironmentVariable('ANDROID_HOME', $Sdk, 'User')
 Write-Host "SDK folder: $Sdk"
 
-$SdkManager = Join-Path $Sdk 'cmdline-tools\latest\bin\sdkmanager.bat'
-if (-not (Test-Path $SdkManager)) {
+$AndroidCli = Join-Path $Sdk 'cmdline-tools\latest\bin\android.exe'
+if (-not (Test-Path $AndroidCli)) {
     Write-Step 'Downloading the Android command-line tools'
     $zip = Join-Path $env:TEMP $CmdlineToolsZip
     Invoke-WebRequest "https://dl.google.com/android/repository/$CmdlineToolsZip" -OutFile $zip
@@ -140,15 +142,21 @@ if (-not (Test-Path $SdkManager)) {
     Move-Item (Join-Path $unpack 'cmdline-tools') $target
     Remove-Item $zip, $unpack -Recurse -Force
 }
+if (-not (Test-Path $AndroidCli)) {
+    throw "Older command-line tools are in $Sdk\cmdline-tools\latest. Delete that folder and re-run."
+}
 
 # 3. SDK packages --------------------------------------------------------------------------------
-Write-Step 'Accepting SDK licences'
-# sdkmanager reads one "y" per licence prompt.
-('y' + "`n") * 20 | & $SdkManager --licenses --sdk_root=$Sdk | Out-Null
+# From here on the script runs native tools (sdkmanager, avdmanager, adb, Gradle) that print
+# warnings to stderr. With output redirected, Windows PowerShell 5.1 turns those into errors that
+# 'Stop' makes fatal, so relax it; every step below checks $LASTEXITCODE or throws itself.
+$ErrorActionPreference = 'Continue'
 
+# Call android.exe directly: sdkmanager.bat is now a wrapper around it, and cmd.exe splits
+# arguments on ';'. The Android CLI needs no separate licence step.
 Write-Step "Installing SDK packages (first run downloads a few GB)"
-& $SdkManager --sdk_root=$Sdk @SdkPackages
-if ($LASTEXITCODE -ne 0) { throw "sdkmanager failed (exit $LASTEXITCODE)." }
+& $AndroidCli --no-metrics "--sdk=$Sdk" sdk install @SdkPackages
+if ($LASTEXITCODE -ne 0) { throw "The Android CLI could not install the SDK packages (exit $LASTEXITCODE)." }
 $env:Path = "$Sdk\platform-tools;$Sdk\emulator;$env:Path"
 
 # 4. Repository and local.properties -------------------------------------------------------------
@@ -177,7 +185,8 @@ if (-not $SkipEmulator) {
     $AvdManager = Join-Path $Sdk 'cmdline-tools\latest\bin\avdmanager.bat'
     $existing = & $AvdManager list avd -c
     if ($existing -notcontains $AvdName) {
-        'no' | & $AvdManager create avd --name $AvdName --package $SystemImage --device 'pixel_8'
+        # Quote the image path inside the cmd line, or cmd.exe splits it on ';'.
+        'no' | cmd /c "`"$AvdManager`" create avd --name $AvdName --package `"$SystemImage`" --device pixel_8"
         if ($LASTEXITCODE -ne 0) { throw 'avdmanager could not create the emulator.' }
     }
 }
