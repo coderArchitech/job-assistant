@@ -259,7 +259,7 @@ interface JobSource {
 | RemoteOK | `GET remoteok.com/api` | Posting date | First array element is a legal notice; terms require crediting and linking back |
 | Remotive | `GET remotive.com/api/remote-jobs?search=&category=` | Publication date | Fetch at most a few times a day; listings may be delayed |
 | We Work Remotely | RSS, e.g. `weworkremotely.com/categories/remote-programming-jobs.rss` | `pubDate` | Parsed with an XML pull parser |
-| Hacker News "Who is hiring" | Algolia HN API: `search_by_date?tags=story,author_whoishiring`, then `items/{id}` | Comment id | Free-text comments; regex pre-filter, then LLM extraction into postings |
+| Hacker News "Who is hiring" | Algolia HN API: `search_by_date?tags=story,author_whoishiring`, then `items/{id}` | Comment id | Free-text comments; strict regex pre-filter (role keyword and either remote or the user's location), at most 100 comments a month to the LLM for extraction (D10) |
 | Naukri, Instahyre, custom portals | `PortalAdapter.search(preset)` in the WebView | Unseen ids | Needs a live session; capped and paced like applying |
 
 Only the Lever endpoint was checked against its documentation for this draft; the others are to be confirmed before each client is built.
@@ -284,7 +284,7 @@ Only the Lever endpoint was checked against its documentation for this draft; th
 Scoring is a three-layer cascade, cheapest first, and the PRD target is that the first two layers remove at least 70% of jobs before any LLM call. Each layer can end a job as Low match with a recorded reason.
 
 1. **Hard filters (rules, no AI).** Deal-breaker keywords, industries and company types; seniority from the title (for example Intern or Director against a 2–10 year profile); work mode against the preference; region and authorization limits found during normalization. A job that fails gets score 0 and the rule's name as its reason.
-2. **Embedding floor.** Cosine similarity between the profile vector (target roles, skills, context) and the job vector (title plus the first 2,000 characters). Below the floor (starting at 0.30, tuned on the golden set) the job is Low match with no LLM call.
+2. **Embedding floor.** Vectors come from a small quantized model bundled in the APK (at most 25 MB, D05), or from the OpenAI embeddings API when an OpenAI key is present. Cosine similarity between the profile vector (target roles, skills, context) and the job vector (title plus the first 2,000 characters). Below the floor (starting at 0.30, tuned on the golden set) the job is Low match with no LLM call.
 3. **LLM score.** The scoring model returns the schema below. The app, not the model, maps the score to a tier using the user's thresholds (defaults 75 and 50).
 
 ```json
@@ -336,7 +336,7 @@ Portals are driven by an Android WebView with JavaScript adapters, because Playw
 
 Built-in portals (Naukri, Instahyre, Greenhouse and Lever forms) are JS bundles with a manifest: version, selectors, flows, health-check steps and `minAppVersion`. Kotlin wraps each in a `ScriptedPortalAdapter` that implements the PRD's `PortalAdapter` contract.
 
-Bundles come from the static config host so selectors can be fixed without an app release. Each bundle is signed with Ed25519; the app verifies it against a public key compiled into the app and falls back to the last good or bundled version if verification fails. Google Play's rule against downloading executable code exempts JavaScript running in a WebView, which this design relies on; the Play policy review in the hardening milestone must confirm it.
+Bundles come from the static config host so selectors can be fixed without an app release. Each bundle is signed with Ed25519; the app verifies it against the two public keys compiled into the app (current and next) and falls back to the last good or bundled version if verification fails. The owner holds the private key offline and signs releases by hand; CI never holds it (D07). Google Play's rule against downloading executable code exempts JavaScript running in a WebView, which this design relies on; the Play policy review in the hardening milestone must confirm it.
 
 **Apply flow** (built-in adapters)
 
@@ -345,7 +345,7 @@ Bundles come from the static config host so selectors can be fixed without an ap
 3. Open the job and classify the page: apply form, already applied, or a redirect to Workday or another unsupported site, which moves the job to "Apply manually" with answers ready to copy.
 4. Fill fields from the answers and drafts. Any unmatched required field sets `NeedsInput`, pauses the job and notifies.
 5. Check for CAPTCHAs and bot challenges (known challenge iframes and pages). If found, hand the page to the user; never attempt to solve it.
-6. Stop before submit by default: highlight Submit and wait for the user's tap. In auto-submit mode (High match, enabled per portal), write `SUBMITTING`, click, and wait for the confirmation selector.
+6. Stop before submit by default: highlight Submit and wait for the user's tap. In auto-submit mode (High match, enabled per portal, and only after the user has submitted 20 applications on that portal by hand, per D11), write `SUBMITTING`, click, and wait for the confirmation selector.
 7. Save a screenshot of the final page to app-private storage, then write `SUBMITTED`.
 
 **Generic browser agent (Beta)** handles custom portals without an adapter.
@@ -400,7 +400,7 @@ Phase 1 launches with the `gmail.send` scope only, which Google classes as sensi
 **Reply tracking**
 
 - Launch: the user marks replies from the Outreach and Applications screens.
-- Opt-in upgrade: request `gmail.readonly` and check only the threads the app created, on the device. Google applies its strictest review to apps with any restricted scope; search results indicate the paid security assessment applies when restricted data is stored on or sent through servers, which an on-device check avoids if email content is never sent to the AI provider. This must be confirmed with Google before the scope is requested, and it also unblocks email OTP.
+- After Phase 1 (D06: not requested at launch), an opt-in upgrade: request `gmail.readonly` and check only the threads the app created, on the device. Google applies its strictest review to apps with any restricted scope; search results indicate the paid security assessment applies when restricted data is stored on or sent through servers, which an on-device check avoids if email content is never sent to the AI provider. This must be confirmed with Google before the scope is requested, and it also unblocks email OTP.
 
 **LinkedIn (assisted only).** "Copy and open" copies the draft to the clipboard and opens the recruiter's profile URL with `ACTION_VIEW`, which the LinkedIn app handles if installed. The app makes no LinkedIn API calls and the WebView runtime refuses LinkedIn hosts.
 
@@ -488,8 +488,8 @@ The app targets API 36, which Google Play has required for new apps and updates 
 | WorkManager workers stop after about 10 minutes | All versions | Fixed-size batches that re-enqueue; no long-running worker |
 | Doze and App Standby buckets defer periodic work | API 23+ | Show the next-run estimate honestly; catch-up run when the app opens; "Run now" |
 | OEM battery managers kill background apps (common on Xiaomi, Oppo, Vivo, Realme, Samsung) | Vendor-specific | Onboarding step that opens the battery optimization settings screen, with per-brand instructions; no `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` |
-| Foreground services must declare a type and its permission | API 34+ | Apply service declares `dataSync` with `FOREGROUND_SERVICE_DATA_SYNC`; `specialUse` is the fallback if Play review objects |
-| `dataSync` services may run 6 hours per 24 hours, then `onTimeout()` fires | API 35+ | The apply service stops itself in `onTimeout()`; real sessions take minutes |
+| Foreground services must declare a type and its permission | API 34+ | Apply service declares `specialUse` with `FOREGROUND_SERVICE_SPECIAL_USE` and a subtype description (D04) |
+| `dataSync` and some other types time out after 6 hours per 24 hours (`onTimeout()`) | API 35+ | Not `dataSync` (D04); the apply service still stops itself when the session ends and in `onTimeout()` if called; real sessions take minutes |
 | Foreground services cannot start from the background | API 31+ | The apply service starts only from the visible Agent at work screen |
 | Notification permission is a runtime prompt | API 33+ | Requested in onboarding; the app degrades to in-app badges if denied |
 | Exact alarms denied by default for new installs | API 34+ | Daily report uses WorkManager with a tolerance of about 15 minutes |
@@ -565,18 +565,20 @@ Two tasks have outside lead times and should start early: Gmail OAuth verificati
 
 ## Open technical questions
 
-These need a decision before the milestone named; the PRD's product questions (cloud runner, auto-submit timing, pricing) are not repeated here.
+These need a decision before the milestone named; the PRD's product questions (cloud runner, auto-submit timing, next portals, pricing) are not repeated here.
 
 1. ~~**SDKs or thin clients**~~ **Decided (D01, T1.01):** official SDK for Anthropic, thin OkHttp client for OpenAI, hand-written JSON schemas for both. See "Client libraries" under AI provider layer.
 2. **Encrypt the database?** (end of foundation): Room holds CTC, notice period and job history but no secrets. SQLCipher adds protection at a cost in APK size and startup time. **Decided (D02): no SQLCipher.** Secrets live only in the vault, and Android's file-based encryption protects app-private storage at rest on every supported version.
 3. **Cloud backup of non-secret data** (end of foundation): back up Room and settings so a new phone keeps history, or disable backup entirely for simplicity? **Decided (D03): back up non-secret data.** Room and settings are included so a new phone keeps history and preferences; the vault, WebView data and proofs are excluded by exact path; the auto-send consent is stored only on the device (`no_backup/`), so a restore starts with it off, and the user re-enters secrets. Follow-up decision (owner): cloud backup runs only when end-to-end encrypted (`disableIfNoEncryptionCapabilities`). See **Backups**.
-4. **Foreground service type** (start of portals and applying): `dataSync` or `specialUse` for the apply session, given Play's declaration review?
-5. **On-device embedder** (start of discovery and scoring): which model, bundled or downloaded on first use, and its size budget?
-6. **Reply tracking scope** (start of outreach and reporting): request `gmail.readonly` at launch, after confirming with Google which review applies to on-device-only access, or ship manual reply marking first?
-7. **Config host signing** (start of portals and applying): who holds the Ed25519 private key, and how is it rotated without stranding old app versions?
-8. **Crash reporting** (start of hardening): on-device logs with a user-initiated export only, or opt-in Crashlytics, which sends data off the device?
-9. **Batch scoring** (end of discovery and scoring): use Anthropic's Message Batches (half price, delayed results) for background scoring, collecting results on the next run?
-10. **Hacker News extraction cost** (end of discovery and scoring): the monthly thread has hundreds of comments; how aggressive should the regex pre-filter be before the LLM?
+4. **Foreground service type** (start of portals and applying): `dataSync` or `specialUse` for the apply session, given Play's declaration review? **Decided (D04): `specialUse`.** The service drives a visible WebView session, which is not data transfer, and Play checks that the declared type matches the behavior. It declares `FOREGROUND_SERVICE_SPECIAL_USE` and a `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` describing the session; the Play pre-review (T5.07) confirms it.
+5. **On-device embedder** (start of discovery and scoring): which model, bundled or downloaded on first use, and its size budget? **Decided (D05): bundled, at most 25 MB.** A small quantized sentence-embedding model ships in the APK and runs with LiteRT or MediaPipe, so the embedding floor works offline from the first run for Claude-only users. The exact model is chosen in T2.15 on the golden set; a larger downloaded model stays possible behind `Embedder`.
+6. **Reply tracking scope** (start of outreach and reporting): request `gmail.readonly` at launch, after confirming with Google which review applies to on-device-only access, or ship manual reply marking first? **Decided (D06): manual reply marking in Phase 1.** Only `gmail.send` is requested; email OTPs are pasted from a notification. Which review on-device-only `gmail.readonly` needs is asked of Google separately.
+7. **Config host signing** (start of portals and applying): who holds the Ed25519 private key, and how is it rotated without stranding old app versions? **Decided (D07): the owner holds the key offline** and signs each release by hand; CI never holds it. The app embeds two public keys, current and next, and accepts a bundle signed by either; a rotation first ships a new "next" key in an app update, then switches signing once that version is widespread.
+8. **Crash reporting** (start of hardening): on-device logs with a user-initiated export only, or opt-in Crashlytics, which sends data off the device? **Decided (D08): on-device logs with a user-initiated export only.** No crash or analytics backend, which keeps the "nothing on our servers" promise.
+9. **Batch scoring** (end of discovery and scoring): use Anthropic's Message Batches (half price, delayed results) for background scoring, collecting results on the next run? **Decided (D09): no batches in Phase 1.** Scoring is about $0.06 a day, so halving it is not worth new matches arriving a run late. Revisit if measured scoring cost is much higher.
+10. **Hacker News extraction cost** (end of discovery and scoring): the monthly thread has hundreds of comments; how aggressive should the regex pre-filter be before the LLM? **Decided (D10): strict.** A comment needs a role keyword and either remote or the user's location, and at most 100 comments a month go to the model. Both are tuned on one real thread in T2.08.
+
+The PRD's product questions on auto-submit timing (D11) and the next portals (D12) were also decided; see the PRD's open questions.
 
 ## Sources
 

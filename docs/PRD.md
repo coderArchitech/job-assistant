@@ -132,7 +132,7 @@ Every job passes three layers, cheapest first, and ends in one tier.
 
 - Review queue: approve, reject or edit each job. Bulk approve for High match.
 - On approve, the agent opens the portal in an in-app automated browser, fills the form and submits.
-- Default mode is "stop before submit": the agent fills everything and the user taps Submit. Optional "auto-submit High match" mode per portal.
+- Default mode is "stop before submit": the agent fills everything and the user taps Submit. Optional "auto-submit High match" mode per portal, available once the user has submitted 20 applications on that portal by hand (D11).
 - Daily apply cap per portal (default 10) and overall (default 25).
 - Supported apply flows: Naukri direct apply with questionnaire, Instahyre "Interested", Greenhouse and Lever forms. Redirects to Workday or unsupported sites go to an "Apply manually" list with the prefilled answers ready to copy.
 - A screenshot of the final page is saved as proof of each submission.
@@ -159,7 +159,7 @@ Every job passes three layers, cheapest first, and ends in one tier.
 - The app does not request the broad READ\_SMS permission, which Google Play restricts for apps that are not the default SMS app.
 - If a run is in the background, the app posts a notification "Naukri needs an OTP"; tapping it opens the app and starts the consent listener.
 - Timeout after 5 minutes; the job is retried at the next run.
-- Email-based OTPs (P1): read from Gmail if the user connected it. This needs the gmail.readonly scope, which Google classifies as restricted and which requires an annual third-party security assessment before public release; until then, a notification lets the user paste the code.
+- Email-based OTPs (P1): read from Gmail if the user connected it. This needs the gmail.readonly scope, which Google classifies as restricted and which requires an annual third-party security assessment before public release. Phase 1 does not request it (D06), so a notification lets the user paste the code.
 
 ### FR10. AI provider and model selection (P0)
 
@@ -355,7 +355,7 @@ Run success rate per portal, adapter failure reasons, approval rate by tier, app
 ### Open questions
 
 - [ ] Should a lightweight cloud runner be offered later for users whose phones kill background work, given credentials would then leave the device?
-- [ ] Which custom portals beyond Naukri and Instahyre get dedicated adapters first (e.g. Wellfound, Cutshort, Hirist, Indeed India)?
-- [ ] Is auto-submit for High match allowed at launch, or only after a user has approved 20 jobs manually?
+- [x] Which custom portals beyond Naukri and Instahyre get dedicated adapters first (e.g. Wellfound, Cutshort, Hirist, Indeed India)? **Decided (D12): Cutshort and Hirist first** (Indian tech jobs); Wellfound and Indeed India later.
+- [x] Is auto-submit for High match allowed at launch, or only after a user has approved 20 jobs manually? **Decided (D11): only after the user has submitted 20 applications on that portal by hand;** until then the portal's auto-submit toggle is disabled.
 - [ ] Free app with BYO key only, or a paid tier with bundled AI credits?
 - [ ] Should the generic AI browser agent ever submit applications, or only fill forms for user review?

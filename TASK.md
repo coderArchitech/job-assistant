@@ -191,7 +191,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ fixture tests pass for at least two feeds.
 
 - [ ] **T2.08 Build the Hacker News "Who is hiring" source** (P0) · Depends on T2.01, T1.12
-  Find the monthly thread through the Algolia HN API, fetch its comments, pre-filter with regex (remote, location, role keywords), and extract postings with the scoring model.
+  Find the monthly thread through the Algolia HN API, fetch its comments, pre-filter with regex (a role keyword and either remote or the user's location, per D10), send at most 100 comments a month to the scoring model, and extract postings with it.
   _Done when:_ one month's thread yields structured postings at a measured, logged cost.
 
 - [ ] **T2.09 Build the company watchlist** (P0) · Depends on T1.03
@@ -299,11 +299,11 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ wiping one portal leaves another portal's session logged in.
 
 - [ ] **T3.09 Build the config host client** (P0) · Depends on T1.10, D07
-  Fetch adapter bundles and the price table; verify Ed25519 signatures with the public key in the app; fall back to the last good or bundled version; respect `minAppVersion`.
+  Fetch adapter bundles and the price table; verify Ed25519 signatures against the two public keys in the app (current and next, D07); fall back to the last good or bundled version; respect `minAppVersion`.
   _Done when:_ a tampered bundle is rejected and the bundled version is used.
 
 - [ ] **T3.10 Set up the config host** (P0) · Depends on D07
-  Static hosting for signed bundles and the price table; a signing script; a release and rollback procedure. No user identifiers in requests.
+  Static hosting for signed bundles and the price table; a signing script the owner runs offline with the private key (D07), never in CI; a release, rollback and key rotation procedure. No user identifiers in requests.
   _Done when:_ a bundle is published, rolled back, and the app follows both.
 
 ### Portal adapters
@@ -344,7 +344,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ an OTP login completes without typing (BR6) on a real device.
 
 - [ ] **T3.19 Build the portal manager** (P0) · Depends on T3.17, T1.07
-  Portals screen: built-in templates (Naukri, Instahyre), custom portals (name, login URL, search URL), credentials, login method, enabled toggle, caps, auto-submit toggle, and "Test connection". Onboarding step 5 and the per-portal terms-of-service acceptance.
+  Portals screen: built-in templates (Naukri, Instahyre), custom portals (name, login URL, search URL), credentials, login method, enabled toggle, caps, auto-submit toggle (disabled until 20 manual submissions on that portal, with the count shown, per D11), and "Test connection". Onboarding step 5 and the per-portal terms-of-service acceptance.
   _Done when:_ a user adds a custom portal and "Test connection" reports the right result.
 
 ### Applying
@@ -354,11 +354,11 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ a test cannot take an eleventh slot on one portal in a day.
 
 - [ ] **T3.21 Build the apply session** (P0) · Depends on T3.13, T3.15, T3.16, T3.18, T3.20
-  The apply flow from the design: take a cap slot, ensure a session, classify the page, fill, check for CAPTCHAs, stop before submit by default (or write `SUBMITTING`, click and confirm in auto-submit mode), save a proof screenshot, write `SUBMITTED`. A `SUBMITTING` record left by a crash goes to "Check manually" and is never retried.
+  The apply flow from the design: take a cap slot, ensure a session, classify the page, fill, check for CAPTCHAs, stop before submit by default (or write `SUBMITTING`, click and confirm in auto-submit mode, which a portal allows only after 20 manual submissions, per D11), save a proof screenshot, write `SUBMITTED`. A `SUBMITTING` record left by a crash goes to "Check manually" and is never retried.
   _Done when:_ killing the app mid-submit never produces a second submission in 20 trials.
 
 - [ ] **T3.22 Build the apply foreground service** (P0) · Depends on T3.21, D04
-  Foreground service with the declared type and permission, started only from the visible screen, with a progress notification; stops itself in `onTimeout()`.
+  Foreground service of type `specialUse` (D04) with `FOREGROUND_SERVICE_SPECIAL_USE` and a `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` describing the visible apply session, started only from the visible screen, with a progress notification; stops itself when the session ends, and in `onTimeout()` if the platform ever calls it.
   _Done when:_ a session survives a brief switch to another app and pauses after the current step.
 
 - [ ] **T3.23 Build the Agent at work screen** (P0) · Depends on T3.21
@@ -507,8 +507,8 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 ### Beta
 
 - [ ] **T5.13 Add on-device analytics** (P1)
-  On-device metrics (run success per portal, adapter failure reasons, approval rate by tier, apply success, reply rate by source, AI cost per applied job) and opt-in anonymous telemetry per decision D08.
-  _Done when:_ metrics are visible in a debug screen and nothing is sent without opt-in.
+  On-device metrics (run success per portal, adapter failure reasons, approval rate by tier, apply success, reply rate by source, AI cost per applied job) and on-device crash logs, with a user-initiated export of both; nothing is sent off the device (D08).
+  _Done when:_ metrics and crash logs are visible in a debug screen, the export produces a file the user can share, and no analytics or crash data leaves the device on its own.
 
 - [ ] **T5.14 Write the beta guide** (P0)
   Setup steps, known limits, how to report problems, and portal account risks.
@@ -535,12 +535,12 @@ Record each decision in the Technical Design's "Open technical questions" sectio
 | D01 | Official AI SDKs or thin Retrofit clients. **Decided in [#7](https://github.com/coderArchitech/job-assistant/pull/7):** `anthropic-java` for Anthropic, thin OkHttp client for OpenAI, hand-written JSON schemas | Start of M1 | T1.12, T1.13 |
 | D02 | Encrypt the Room database with SQLCipher. **Decided 2026-11-18 (owner): no SQLCipher.** `agent.db` holds no secrets, and Android's file-based encryption already protects app storage at rest | End of M1 | T1.03 |
 | D03 | Cloud backup of non-secret data, or no backup. **Decided 2026-11-18 (owner): back up non-secret data** (`agent.db`, `settings.pb`); exclude `datastore/vault.pb`, `app_webview/` and `files/proofs/` by exact path; after a restore, auto-send is off (its consent is stored only in `no_backup/`) and secrets are asked for again. Follow-up (owner): cloud backup only when end-to-end encrypted (`disableIfNoEncryptionCapabilities="true"`) | End of M1 | T1.08 |
-| D04 | Foreground service type: `dataSync` or `specialUse` | Start of M3 | T3.22 |
-| D05 | On-device embedding model, bundled or downloaded, size budget | Start of M2 | T2.15 |
-| D06 | Request `gmail.readonly` for reply tracking and email OTP, or ship manual marking only | Start of M4 | T4.05 |
-| D07 | Who holds the config-host signing key and how it rotates | Start of M3 | T3.09, T3.10 |
-| D08 | Crash reporting: on-device export only, or opt-in Crashlytics | Start of M5 | T5.13 |
-| D09 | Use Message Batches for background scoring | End of M2 | T2.17 |
-| D10 | Hacker News regex pre-filter strictness | End of M2 | T2.08 |
-| D11 | Auto-submit at launch, or only after 20 manual approvals (PRD) | End of M3 | T3.21 |
-| D12 | Next portals for dedicated adapters (Wellfound, Cutshort, Hirist, Indeed India) (PRD) | End of M3 | Phase 2 |
+| D04 | Foreground service type: `dataSync` or `specialUse`. **Decided 2026-11-18 (owner): `specialUse`** with `FOREGROUND_SERVICE_SPECIAL_USE` and a subtype description of the visible apply session; filling a portal form in a WebView is not data sync. Confirm in the Play pre-review (T5.07) | Start of M3 | T3.22 |
+| D05 | On-device embedding model, bundled or downloaded, size budget. **Decided 2026-11-18 (owner): bundle a small quantized sentence-embedding model in the APK, at most 25 MB**, run with LiteRT or MediaPipe; the exact model is picked in T2.15 on the golden set. A downloaded larger model stays possible behind `Embedder` | Start of M2 | T2.15 |
+| D06 | Request `gmail.readonly` for reply tracking and email OTP, or ship manual marking only. **Decided 2026-11-18 (owner): manual marking only in Phase 1;** only `gmail.send` is requested. Email OTPs are pasted from a notification. Ask Google separately which review on-device-only `gmail.readonly` needs | Start of M4 | T4.05 |
+| D07 | Who holds the config-host signing key and how it rotates. **Decided 2026-11-18 (owner): the owner holds the Ed25519 private key offline** and signs each release by hand; CI never holds it. The app embeds two public keys (current and next), so a rotation ships the next key in an app update before it is used | Start of M3 | T3.09, T3.10 |
+| D08 | Crash reporting: on-device export only, or opt-in Crashlytics. **Decided 2026-11-18 (owner): on-device logs with a user-initiated export only;** no Crashlytics and nothing sent off the device | Start of M5 | T5.13 |
+| D09 | Use Message Batches for background scoring. **Decided 2026-11-18 (owner): no batches in Phase 1;** score synchronously. Scoring is about $0.06 a day, so halving it is not worth results arriving a run late. Revisit if measured scoring cost is much higher | End of M2 | T2.17 |
+| D10 | Hacker News regex pre-filter strictness. **Decided 2026-11-18 (owner): strict:** a comment needs a role keyword and (remote or the user's location); at most 100 comments a month go to the model. Tune both on one real thread in T2.08 | End of M2 | T2.08 |
+| D11 | Auto-submit at launch, or only after 20 manual approvals (PRD). **Decided 2026-11-18 (owner): only after 20 manual submissions on that portal;** until then the per-portal auto-submit toggle is disabled with the count shown | End of M3 | T3.19, T3.21 |
+| D12 | Next portals for dedicated adapters (Wellfound, Cutshort, Hirist, Indeed India) (PRD). **Decided 2026-11-18 (owner): Cutshort and Hirist first** (Indian tech jobs); Wellfound and Indeed India later | End of M3 | Phase 2 |
