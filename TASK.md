@@ -108,6 +108,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 - [ ] **T1.08 Configure backup exclusions** (P0) · Depends on T1.07
   `dataExtractionRules` (API 31+) and `fullBackupContent` (API 29–30) exclude `vault.pb`, `app_webview/` and `files/proofs/`.
   _Note from T1.06:_ Decide whether `settings.pb` is backed up (D03); if it is, reset `autoSendEmails` to false after a restore. Exclude `datastore/vault.pb` by exact path, never the whole `datastore/` directory.
+  _Note from T1.07:_ **Blocks wiring the vault into the app:** no PR may add `:core:security` to `:app` or a feature module before this lands, because Auto Backup would include `vault.pb` today.
   _Done when:_ a `bmgr` backup and restore on both API levels contains no vault, cookies or proofs.
 
 - [ ] **T1.09 Add log redaction** (P0) · Depends on T0.02
@@ -140,6 +141,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 - [ ] **T1.15 Add the prompt guard** (P0) · Depends on T1.07, T1.11
   Scan every outgoing AI request for current vault values and the last OTP; block the call and log a redacted security event on a match.
+  _Note from T1.07:_ Read secrets with `Secret.useChars` where possible; `reveal()` needs `@RevealsSecret`. Use `Vault.slots()` to enumerate secrets to scan for.
   _Done when:_ a request containing a stored password is blocked in a test.
 
 ### Profile and app shell
@@ -334,6 +336,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 - [ ] **T3.17 Implement portal login** (P0) · Depends on T3.08, T1.07
   Check a logged-in marker first; otherwise fill credentials from the vault through the bridge. Results: `LoggedIn`, `OtpNeeded`, or `Failed` with a reason. Two bad-credential failures in a row disable the portal.
+  _Note from T1.07:_ Handle `VaultRead.Unreadable` (ask the user to re-enter) differently from `VaultException` (retry later); never count either as a bad-credential login failure.
   _Done when:_ a second run reuses the session without touching credentials.
 
 - [ ] **T3.18 Read OTPs from SMS** (P0) · Depends on T3.17
@@ -454,6 +457,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 - [ ] **T5.02 Implement "Delete all data"** (P0) · Depends on T1.07, T3.08, T4.02
   Cancel all work, delete the database, `vault.pb` and Keystore aliases, cookies, web storage and WebView profiles, resume, proofs and caches; revoke Google authorization; clear DataStore; restart into onboarding.
+  _Note from T1.07:_ Call `Vault.wipe()`; deleting `vault.pb` directly lets the running vault write its cached keyset back.
   _Done when:_ an inspection of app storage after the wipe finds no user data.
 
 - [ ] **T5.03 Add consent records** (P0) · Depends on T1.17
@@ -529,8 +533,8 @@ Record each decision in the Technical Design's "Open technical questions" sectio
 | ID | Decision | Needed by | Blocks |
 | --- | --- | --- | --- |
 | D01 | Official AI SDKs or thin Retrofit clients. **Decided in [#7](https://github.com/coderArchitech/job-assistant/pull/7):** `anthropic-java` for Anthropic, thin OkHttp client for OpenAI, hand-written JSON schemas | Start of M1 | T1.12, T1.13 |
-| D02 | Encrypt the Room database with SQLCipher | End of M1 | T1.03 |
-| D03 | Cloud backup of non-secret data, or no backup | End of M1 | T1.08 |
+| D02 | Encrypt the Room database with SQLCipher. **Decided 2026-11-18 (owner): no SQLCipher.** `agent.db` holds no secrets, and Android's file-based encryption already protects app storage at rest | End of M1 | T1.03 |
+| D03 | Cloud backup of non-secret data, or no backup. **Decided 2026-11-18 (owner): back up non-secret data** (`agent.db`, `settings.pb`); exclude `datastore/vault.pb`, `app_webview/` and `files/proofs/` by exact path; after a restore, switch auto-send emails off and ask for secrets again | End of M1 | T1.08 |
 | D04 | Foreground service type: `dataSync` or `specialUse` | Start of M3 | T3.22 |
 | D05 | On-device embedding model, bundled or downloaded, size budget | Start of M2 | T2.15 |
 | D06 | Request `gmail.readonly` for reply tracking and email OTP, or ship manual marking only | Start of M4 | T4.05 |
