@@ -59,7 +59,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Run instrumented tests on an emulator
+      - name: Run instrumented tests and the backup check on an emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
@@ -67,7 +67,13 @@ jobs:
           target: google_apis
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: ./gradlew deviceTest
+          # The runner runs each line on its own and fails the step at the first line that fails.
+          # The backup check is the T1.08 "Done when": a bmgr backup and restore without the
+          # vault, WebView cookies, apply proofs or the auto-send consent. It runs on API 29
+          # (backup_rules.xml) and API 36 (data_extraction_rules.xml); API 34 would repeat API 36.
+          script: |
+            ./gradlew deviceTest
+            if [ "${{ matrix.api-level }}" != "34" ]; then ./gradlew installDevDebug && scripts/ci/backup_restore_check.sh com.coderarchitech.jobassistant.dev; fi
       - name: Upload reports
         if: failure()
         uses: actions/upload-artifact@v6

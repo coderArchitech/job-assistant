@@ -156,7 +156,7 @@ Lists such as skills are stored as JSON columns through kotlinx.serialization ty
 | Caps | 25 applies a day overall, 10 per new portal, 10 emails a day | PRD |
 | Budget | $10 a month; generic browser agent $0 a day, so it stays off until the user gives it a budget | Chosen in T1.06 |
 | AI | Provider (unset until onboarding), model override per task (none: use the remote-config default) | PRD FR10 |
-| Toggles | Auto-send emails off, email digest off | PRD |
+| Toggles | Auto-send emails off, email digest off. Auto-send is stored only on the device (see **Backups**) | PRD |
 
 Rules for reading and changing the file:
 
@@ -439,14 +439,13 @@ The app's most valuable assets are portal passwords, session cookies and a paid 
   - A missing key means the old values are unreadable anyway, so the next `put` starts a new vault and reports what was lost.
   - A corrupt file reads as an empty vault.
 - **Accepted limits.**
-  - Someone who can write the app's private files (root, or a same-install backup restore) can put back an older ciphertext for a slot, or delete entries, without detection. They can never read or move a secret.
+  - Someone who can write the app's private files (root) can put back an older ciphertext for a slot, or delete entries, without detection. They can never read or move a secret.
   - The vault is single-process; a component that moves to its own `android:process` needs `MultiProcessDataStoreFactory` first.
-  - `:app` must not depend on `:core:security` until T1.08 excludes `datastore/vault.pb` from backups.
 - **Tests.** JVM tests run against a fake key. Device tests run against the real Keystore on API 29, 34 and 36 through `./gradlew deviceTest`, which runs the instrumented tests of `:app` and of every library module that has `src/androidTest`.
 
 | Threat | Asset | Control |
 | --- | --- | --- |
-| Device backup restored elsewhere | Vault, cookies, proofs | `dataExtractionRules` (API 31+) and `fullBackupContent` (API 29–30) exclude `vault.pb`, `app_webview/` and `files/proofs/`; Keystore keys never leave the device anyway |
+| Device backup restored elsewhere | Vault, cookies, proofs, auto-send consent | `dataExtractionRules` (API 31+) and `fullBackupContent` (API 29–30) exclude `datastore/vault.pb`, `datastore/vault.pb.tmp`, `app_webview/` and `files/proofs/` by exact path; cloud backup runs only when end-to-end encrypted (API 31+); the auto-send consent lives in `no_backup/`; Keystore keys never leave the device. See **Backups** |
 | Secrets in prompts | Passwords, OTPs, cookies | Placeholders in snapshots, prompt guard scans every request, OTPs cleared after use |
 | Secrets in logs or crash reports | All secrets | Redacting log tree; HTTP logging only in debug builds with `x-api-key`, `Authorization` and `Cookie` stripped; no request bodies logged |
 | Shoulder-surfing or screen capture | Credential screens | `FLAG_SECURE` on vault and credential screens |
@@ -454,6 +453,25 @@ The app's most valuable assets are portal passwords, session cookies and a paid 
 | Hostile page calling the native bridge | Vault, app data | Origin-restricted web message listeners, no `addJavascriptInterface`, navigation allowlist |
 | Network interception | API key, credentials | HTTPS only (`cleartextTrafficPermitted=false`), system trust store, no user-installed CAs in release |
 | Lost or shared phone | Everything | Optional biometric or device-PIN lock; "Delete all data" |
+
+**Backups** (task T1.08, decision D03)
+
+- Auto Backup is on and backs up non-secret data: the Room database, `settings.pb` and other app files, so a new phone keeps job history and preferences.
+- These are excluded by exact path, in `res/xml/data_extraction_rules.xml` (API 31+, both `<cloud-backup>` and `<device-transfer>`) and `res/xml/backup_rules.xml` (API 29–30):
+  - `files/datastore/vault.pb`, and `vault.pb.tmp`, the temporary file DataStore writes during each vault update;
+  - `app_webview/`: WebView cookies, local storage and IndexedDB;
+  - `files/proofs/`.
+
+  `datastore/` is never excluded as a whole, so `settings.pb` stays in the backup.
+- Cloud backup sets `disableIfNoEncryptionCapabilities="true"`: on a phone without end-to-end backup encryption (no screen lock), personal data is not sent to the cloud. Android 10–11 have no such switch. Phone-to-phone transfer is unaffected.
+- **Auto-send consent never leaves the phone.** The "send recruiter emails without approval" toggle is stored as the presence of `no_backup/auto_send_emails_consent`, never in `settings.pb`. Android never backs up or transfers `no_backup/`, so a restored or transferred install always starts with auto-send off, without any restore-time code. Secrets are re-entered because the vault is never restored.
+- Two safety rules keep data from slipping past these paths: `webview-data-suffix` (`setDataDirectorySuffix` would move WebView data out of `app_webview/`) and `external-files` (Auto Backup includes the external-files domain).
+- **Check.** `scripts/ci/backup_restore_check.sh` runs in the instrumented CI jobs on API 29 (`fullBackupContent`) and API 36 (`dataExtractionRules`). It:
+  1. plants a vault file, a vault temp file, cookies, a proof, the consent marker, `settings.pb` and a control file;
+  2. runs `bmgr backupnow`, `pm clear` and `bmgr restore` with the local transport;
+  3. checks that only the non-secret files come back.
+
+  The local transport applies the `<cloud-backup>` rules, so `<device-transfer>` is covered by `BackupRulesTest`, which keeps both sections identical.
 
 **Delete all data** runs in one coroutine: cancel all WorkManager work → delete the Room database → call `Vault.wipe()` (which empties `vault.pb` and deletes the Keystore alias; deleting the file directly is not enough, because the running vault would write its cached keyset back) → clear cookies, web storage and WebView profiles → delete resume, proofs and caches → revoke Google authorization → clear DataStore → restart into onboarding.
 
@@ -551,7 +569,7 @@ These need a decision before the milestone named; the PRD's product questions (c
 
 1. ~~**SDKs or thin clients**~~ **Decided (D01, T1.01):** official SDK for Anthropic, thin OkHttp client for OpenAI, hand-written JSON schemas for both. See "Client libraries" under AI provider layer.
 2. **Encrypt the database?** (end of foundation): Room holds CTC, notice period and job history but no secrets. SQLCipher adds protection at a cost in APK size and startup time. **Decided (D02): no SQLCipher.** Secrets live only in the vault, and Android's file-based encryption protects app-private storage at rest on every supported version.
-3. **Cloud backup of non-secret data** (end of foundation): back up Room and settings so a new phone keeps history, or disable backup entirely for simplicity? **Decided (D03): back up non-secret data.** Room and settings are included so a new phone keeps history and preferences; the vault, WebView data and proofs are excluded by exact path; after a restore, auto-send emails is switched off and the user re-enters secrets.
+3. **Cloud backup of non-secret data** (end of foundation): back up Room and settings so a new phone keeps history, or disable backup entirely for simplicity? **Decided (D03): back up non-secret data.** Room and settings are included so a new phone keeps history and preferences; the vault, WebView data and proofs are excluded by exact path; the auto-send consent is stored only on the device (`no_backup/`), so a restore starts with it off, and the user re-enters secrets. Follow-up decision (owner): cloud backup runs only when end-to-end encrypted (`disableIfNoEncryptionCapabilities`). See **Backups**.
 4. **Foreground service type** (start of portals and applying): `dataSync` or `specialUse` for the apply session, given Play's declaration review?
 5. **On-device embedder** (start of discovery and scoring): which model, bundled or downloaded on first use, and its size budget?
 6. **Reply tracking scope** (start of outreach and reporting): request `gmail.readonly` at launch, after confirming with Google which review applies to on-device-only access, or ship manual reply marking first?

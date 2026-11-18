@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Auto Backup rules for Android 10 and 11 (API 29-30), where data_extraction_rules.xml is not read.
+    Task T1.08, decision D03 in TASK.md: back up non-secret data and exclude secrets by exact path,
+    never a whole directory that could sweep in more (so datastore/settings.pb stays in the backup).
+    Keep in step with data_extraction_rules.xml.
+    - files/datastore/vault.pb: the credential vault, and vault.pb.tmp, the temporary file
+      DataStore writes during each vault update (ciphertext only, but still the vault)
+    - app_webview/: WebView cookies, local storage and IndexedDB
+    - files/proofs/: apply proofs saved after each application
+-->
+<full-backup-content>
+    <exclude domain="file" path="datastore/vault.pb" />
+    <exclude domain="file" path="datastore/vault.pb.tmp" />
+    <exclude domain="root" path="app_webview/" />
+    <exclude domain="file" path="proofs/" />
+</full-backup-content>

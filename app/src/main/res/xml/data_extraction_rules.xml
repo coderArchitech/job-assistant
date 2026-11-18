@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backup rules for Android 12 (API 31) and later. Task T1.08, decision D03 in TASK.md:
+    back up non-secret data and exclude secrets by exact path, never a whole directory that could
+    sweep in more (so datastore/settings.pb stays in the backup). Keep in step with backup_rules.xml.
+    - files/datastore/vault.pb: the credential vault, and vault.pb.tmp, the temporary file
+      DataStore writes during each vault update (ciphertext only, but still the vault)
+    - app_webview/: WebView cookies, local storage and IndexedDB
+    - files/proofs/: apply proofs saved after each application
+    <cloud-backup disableIfNoEncryptionCapabilities="true">: owner decision (D03 follow-up): the
+    non-secret personal data (job history, settings) goes to a cloud backup only when it is
+    end-to-end encrypted, so no cloud backup is made on a device without a screen lock. Device
+    transfer has no such attribute. backup_rules.xml (API 29-30) has no equivalent.
+-->
+<data-extraction-rules>
+    <cloud-backup disableIfNoEncryptionCapabilities="true">
+        <exclude domain="file" path="datastore/vault.pb" />
+        <exclude domain="file" path="datastore/vault.pb.tmp" />
+        <exclude domain="root" path="app_webview/" />
+        <exclude domain="file" path="proofs/" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="datastore/vault.pb" />
+        <exclude domain="file" path="datastore/vault.pb.tmp" />
+        <exclude domain="root" path="app_webview/" />
+        <exclude domain="file" path="proofs/" />
+    </device-transfer>
+</data-extraction-rules>

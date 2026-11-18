@@ -3,6 +3,8 @@ package com.coderarchitech.jobassistant.core.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.dataStoreFile
+import com.coderarchitech.jobassistant.core.data.settings.AUTO_SEND_CONSENT_FILE_NAME
+import com.coderarchitech.jobassistant.core.data.settings.AutoSendConsentMarker
 import com.coderarchitech.jobassistant.core.data.settings.DataStoreSettingsRepository
 import com.coderarchitech.jobassistant.core.data.settings.SETTINGS_FILE_NAME
 import com.coderarchitech.jobassistant.core.data.settings.SettingsRepository
@@ -18,6 +20,7 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import java.io.File
 import javax.inject.Singleton
 
 /** Binds the `:core:data` repository interfaces to their implementations. */
@@ -42,5 +45,15 @@ internal abstract class DataModule {
                 scope = CoroutineScope(ioDispatcher + SupervisorJob()),
                 produceFile = { context.dataStoreFile(SETTINGS_FILE_NAME) },
             )
+
+        /**
+         * The auto-send consent lives in `noBackupFilesDir`, which is never backed up or transferred
+         * (decision D03). The directory is resolved on first use, off the main thread.
+         */
+        @Provides
+        @Singleton
+        fun provideAutoSendConsentMarker(
+            @ApplicationContext context: Context,
+        ): AutoSendConsentMarker = AutoSendConsentMarker { File(context.noBackupFilesDir, AUTO_SEND_CONSENT_FILE_NAME) }
     }
 }
