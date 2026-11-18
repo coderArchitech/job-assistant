@@ -122,7 +122,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   OkHttp clients per destination group (AI, job sources, Google, config host), shared kotlinx.serialization config, retry with exponential backoff and jitter that honors `retry-after`, and a network security config with cleartext disabled.
   _Done when:_ MockWebServer tests cover retries on 429, 529 and 5xx and no retry on other 4xx.
 
-- [ ] **T1.11 Define the AI interfaces** (P0) · Depends on T1.02
+- [x] **T1.11 Define the AI interfaces** (P0) · Depends on T1.02 · [#18](https://github.com/coderArchitech/job-assistant/pull/18)
   `LlmProvider`, `LlmRequest<T>`, `LlmResult<T>`, `OutputSchema<T>`, `Embedder` and the `AiTask` enum, as in the design.
   _Done when:_ a fake provider passes a contract test suite that both real providers will also run.
 
