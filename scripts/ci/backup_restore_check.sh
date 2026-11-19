@@ -124,9 +124,10 @@ echo "$transports"
 # images name it android/com.android.internal.backup.LocalTransport. The selected one has a '*'.
 transport="$(sed -n 's/^[[:space:]*]*\([^[:space:]]*LocalTransport\)[[:space:]]*$/\1/p' <<<"$transports" | head -n 1)"
 [[ -n "$transport" ]] || fail "no local transport on this device"
-dev bmgr transport "$transport"
-for _ in $(seq 1 30); do
+# Right after boot the backup manager can ignore a transport switch, so ask again until it sticks.
+for _ in $(seq 1 60); do
   dev bmgr list transports | grep -q "^[[:space:]]*\*[[:space:]]*$transport" && break
+  dev bmgr transport "$transport" >/dev/null || true
   sleep 1
 done
 dev bmgr list transports | grep -q "^[[:space:]]*\*[[:space:]]*$transport" || fail "could not select $transport"
