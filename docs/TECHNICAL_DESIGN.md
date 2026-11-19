@@ -93,12 +93,12 @@ The tinted row runs unattended; the lower row needs the user on screen, and auto
 | --- | --- | --- | --- | --- |
 | Discover | `DiscoverWorker` (background) | → Found | Fetch each enabled source since its cursor, normalize, deduplicate | None (no AI calls) |
 | Score | `ScoreWorker`, batches of 25 jobs | Found → Scored | Hard filters, embedding floor, LLM score for survivors | Monthly budget |
-| Tailor | `TailorWorker` | Scored (High) or Approved → Ready | Cover letter, form answers, email and LinkedIn drafts | Monthly budget |
+| Tailor | `TailorWorker` | Approved → Ready (a High-match job's drafts are written while it is still Scored) | Cover letter, form answers, email and LinkedIn drafts | Monthly budget |
 | Apply | `ApplySession` in the Agent at work screen plus a foreground service | Approved → Applied, NeedsInput or Failed | Log in, fill the form, stop before submit or submit, save proof | Daily caps per portal and overall |
 | Outreach | `OutreachWorker` | Applied → email sent | Send approved emails, create 7-day follow-ups | 10 emails per day |
 | Report | `ReportWorker`, daily at the chosen time | — | Aggregate counts and cost, notify, optional digest | None |
 
-**Eager and lazy tailoring.** High-match jobs are tailored in the background so drafts are ready in Review. Partial-match jobs are tailored only after approval, which keeps writing-model spend proportional to what the user actually wants.
+**Eager and lazy tailoring.** High-match jobs are tailored in the background so drafts are ready in Review. Partial-match jobs are tailored only after approval, which keeps writing-model spend proportional to what the user actually wants. Writing drafts never changes a job's status: a High-match job stays Scored until the user approves it, so Approved always means the user approved it (D13).
 
 **Scheduling rules**
 
@@ -111,7 +111,7 @@ The tinted row runs unattended; the lower row needs the user on screen, and auto
 
 **Applying never runs unattended.** Background runs end by notifying the user ("14 new High matches"). Applying starts only when the user taps **Apply approved**, which opens the Agent at work screen and starts a foreground service so the process keeps its priority during each step. If the user leaves the screen, the session finishes the current step, pauses and posts a notification.
 
-**No double submission.** Before clicking submit, the session writes the application as `SUBMITTING` with an attempt ID. It writes `SUBMITTED` only after the portal's confirmation appears. A record still in `SUBMITTING` after a crash is never retried automatically; it moves to a "Check manually" list.
+**No double submission.** Before clicking submit, the session writes the application as `SUBMITTING` with an attempt ID. It writes `SUBMITTED` only after the portal's confirmation appears. A record still in `SUBMITTING` after a crash is never retried automatically; it moves to a "Check manually" list. Every write that settles a live attempt carries its attempt ID, so a stale session cannot confirm or fail a newer one (see **Status transitions**).
 
 ## Data model
 
@@ -140,7 +140,7 @@ Lists such as skills are stored as JSON columns through kotlinx.serialization ty
 
 - **Validation in the type.** Constructors reject impossible values with `require`: a score outside 0–100, a reason over 140 characters, preset context over 2,000 characters, a salary with no bounds or `min > max`, a negative cap or token count, a built-in portal without an adapter, an LLM score without a model.
 - **Tier is computed, not stored.** `TierThresholds(high = 75, partial = 50).tierFor(score)` gives the tier, so changing thresholds re-tiers stored scores without AI calls.
-- **Statuses.** `JobStatus` holds the ten PRD statuses plus `READY`, `NEEDS_INPUT` and `SUBMITTING`, which are internal and show as `APPROVED` (`userFacing`). `ApplicationStatus` adds `CHECK_MANUALLY` for an attempt left in `SUBMITTING` after a crash, and `APPLY_MANUALLY` for redirects to unsupported sites. Allowed transitions are part of T1.05.
+- **Statuses.** `JobStatus` holds the ten PRD statuses plus `READY`, `NEEDS_INPUT` and `SUBMITTING`, which are internal and show as `APPROVED` (`userFacing`). `ApplicationStatus` adds `CHECK_MANUALLY` for an attempt left in `SUBMITTING` after a crash, and `APPLY_MANUALLY` for redirects to unsupported sites. The allowed moves are in `JobTransitions` and `ApplicationTransitions` (see **Status transitions**).
 - **Units.** Times are `java.time.Instant`, dates `LocalDate`, salaries whole currency units with an ISO 4217 code and a period, and AI cost micro-US-dollars (`1_000_000` = $1) so sums stay exact.
 - **JSON columns.** Value types stored as JSON (`Skill`, `Role`, `Education`, `Preferences`, `DealBreakers`, `StandardAnswer`, `Salary`, `JobFilters`, `RunSchedule`, `RunError`) are `@Serializable`; new fields get defaults so older rows still decode. `YearMonth` is stored as `"YYYY-MM"`.
 - **No secrets.** No type has a field for a password, token, cookie or OTP; `Portal.vaultKey` (`portal/<id>`) names the vault slot instead.
@@ -185,12 +185,32 @@ Rules for reading and changing the file:
   - Drafts, decisions, match results and outreach messages are deleted with their job.
   - A job that has an application cannot be deleted (`RESTRICT`), so a `SUBMITTED` record is never lost and the job cannot be applied to a second time after it is found again.
   - A deleted portal, preset or run leaves its applications, runs and usage rows in place with the link cleared.
-- **Status changes are not in the DAOs.** `Job`, `Application`, `OutreachMessage` and `Run` have insert and read methods but no `@Update`, so no code can overwrite a status without the expected-status precondition; T1.05 adds the guarded transitions. A draft is never overwritten either: `regenerate` skips a draft the user edited.
+- **Status changes are not in the DAOs.** `Job`, `Application`, `OutreachMessage` and `Run` have insert and read methods but no `@Update`; `JobDao` and `ApplicationDao` add only a guarded compare-and-set, called by the repositories (see **Status transitions**). `OutreachMessage` and `Run` get theirs with the features that use them (T4.03, T4.05 and T2.20). A draft is never overwritten either: `regenerate` skips a draft the user edited.
 - **No secrets.** No column holds a password, token, cookie or OTP; `SchemaGuardsTest` fails if one is named like a secret. A test also pins the stored enum names.
 
 ![Job status: 10 statuses, 3 internal states](images/design-job-status.png)
 
 The PRD's ten user-visible statuses stay as they are. The pipeline adds three internal states that the UI groups under them: `Ready` (tailored, shown as Approved), `NeedsInput` and `Submitting` (both shown as Approved with a badge).
+
+**Status transitions** (`:core:model` and `:core:data`, task T1.05). `JobTransitions` and `ApplicationTransitions` hold the allowed moves, and `JobRepository` and `ApplicationRepository` are the only code that changes a status. Each call checks the move against the table, then runs one `UPDATE … WHERE status = :from` in a transaction, so two writers can never both succeed. The result is a `TransitionResult`: `Moved`, `NotAllowed`, `Conflict` (with the status the record actually has), `NotFound`, or `AttemptMismatch`.
+
+| From | Pipeline may move it to |
+| --- | --- |
+| Found | Scored, Failed (scoring output still invalid after one retry) |
+| Scored | Approved, Skipped |
+| Approved | Ready, Failed |
+| Ready | NeedsInput, Submitting, Failed |
+| NeedsInput | Ready, Submitting, Failed |
+| Submitting | Applied, Failed |
+| Applied | Replied, Rejected |
+| Replied | Interview, Rejected |
+| Interview | Offer, Rejected |
+| Offer, Rejected, Skipped, Failed | none |
+
+- **Manual changes** (PRD FR12): `transitionManually` lets the user set any status the UI shows, other than the current one, but never an internal one. From `Submitting` it allows only Applied or Failed, so a job cannot be re-approved while a click is in flight. A stale screen still gets `Conflict`.
+- **Applications.** A live attempt is settled with `markSubmitted`, `markFailed` or `markCheckManually`, each taking the attempt ID. The user settles a record that is no longer in flight with `confirmSubmittedManually` or `markFailedManually`, which refuse `SUBMITTING`. A failed application is final in Phase 1: it is not retried.
+- **Crash recovery.** `recoverInterruptedSubmissions()` moves every application left in `SUBMITTING` to `CHECK_MANUALLY`. Call it once at process start, before any apply session can begin, because it cannot tell a crashed attempt from a live one. The matching jobs stay `Submitting` until the user settles them.
+- **Several writes at once.** `TransactionRunner.run { … }` commits an application and its job together. The repositories return refusals as values, so call `requireMoved()` on each result inside the block to roll everything back when one write does not move.
 
 ## AI provider layer
 
@@ -618,6 +638,8 @@ These need a decision before the milestone named; the PRD's product questions (c
 8. **Crash reporting** (start of hardening): on-device logs with a user-initiated export only, or opt-in Crashlytics, which sends data off the device? **Decided (D08): on-device logs with a user-initiated export only.** No crash or analytics backend, which keeps the "nothing on our servers" promise.
 9. **Batch scoring** (end of discovery and scoring): use Anthropic's Message Batches (half price, delayed results) for background scoring, collecting results on the next run? **Decided (D09): no batches in Phase 1.** Scoring is about $0.06 a day, so halving it is not worth new matches arriving a run late. Revisit if measured scoring cost is much higher.
 10. **Hacker News extraction cost** (end of discovery and scoring): the monthly thread has hundreds of comments; how aggressive should the regex pre-filter be before the LLM? **Decided (D10): strict.** A comment needs a role keyword and either remote or the user's location, and at most 100 comments a month go to the model. Both are tuned on one real thread in T2.08.
+
+11. **Status while tailoring** (T1.05): should a High-match job that is tailored in the background move to `Ready` before the user approves it? **Decided (D13): no.** Writing drafts does not change the status; a High-match job stays Scored until approved, and `Ready` is reachable only from `Approved` (and back from `NeedsInput`), so "Approved" always means the user approved it.
 
 The PRD's product questions on auto-submit timing (D11) and the next portals (D12) were also decided; see the PRD's open questions.
 
