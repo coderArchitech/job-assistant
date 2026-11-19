@@ -166,6 +166,28 @@ Rules for reading and changing the file:
 - A corrupt file is replaced with the defaults. A read that keeps failing with an I/O error is retried three times (100, 200, 400 ms) and then fails the flow instead of inventing values, so the budget guard and caps can fail closed.
 - No secrets: the API key is in the vault; `settings.pb` holds only the provider name and model ids.
 
+**Room database** (`:core:data`, task T1.03). `AgentDatabase` (`agent.db`, version 1) has one table per entity above, named in snake case (`job`, `match_result`, `outreach_message` and so on). Each table has an entity class, `toEntity()` and `toModel()` mappers to the pure `:core:model` type, and a DAO under `core.data.db`. The schema for every version is exported to `core/data/schemas/` and committed; the Room Gradle plugin writes it. Rules the code follows:
+
+- **No destructive migration.** The builder never calls `fallbackToDestructiveMigration`, so a missing migration fails loudly instead of wiping the user's history (migration tests are T1.04).
+- **Column choices.**
+  - Times are epoch milliseconds, so sub-millisecond precision is dropped; compare timestamps only after truncating to milliseconds, and key guards on status or attempt ID, never on a timestamp.
+  - Dates are ISO text, enums are stored by constant name, and lists, maps and value types are JSON through one `Converters` object (unknown JSON keys are ignored and new fields have defaults).
+  - `Job.salary` is flattened into `salaryMin`, `salaryMax`, `salaryCurrency` and `salaryPeriod` so the Jobs screen can filter on it in SQL.
+  - `DailyReport.countsByStatus` is keyed by `JobStatus` constant name.
+  - `Profile` is one row with `id = 1`.
+- **Keys and constraints.**
+  - `Job` is unique on (source, externalId) and indexed on `dedupeHash`, `canonicalUrl` and `status`; `insert` returns -1 for a duplicate.
+  - `Application` is unique on `jobId`.
+  - `Draft` is unique on (`jobId`, `kind`).
+  - `CompanyWatchlist` is unique on (`atsType`, `boardSlug`).
+  - `MatchResult` is keyed on (`jobId`, `profileVersion`); T2.17 adds the context hash and model to the key when it builds the score cache.
+- **Foreign keys.**
+  - Drafts, decisions, match results and outreach messages are deleted with their job.
+  - A job that has an application cannot be deleted (`RESTRICT`), so a `SUBMITTED` record is never lost and the job cannot be applied to a second time after it is found again.
+  - A deleted portal, preset or run leaves its applications, runs and usage rows in place with the link cleared.
+- **Status changes are not in the DAOs.** `Job`, `Application`, `OutreachMessage` and `Run` have insert and read methods but no `@Update`, so no code can overwrite a status without the expected-status precondition; T1.05 adds the guarded transitions. A draft is never overwritten either: `regenerate` skips a draft the user edited.
+- **No secrets.** No column holds a password, token, cookie or OTP; `SchemaGuardsTest` fails if one is named like a secret. A test also pins the stored enum names.
+
 ![Job status: 10 statuses, 3 internal states](images/design-job-status.png)
 
 The PRD's ten user-visible statuses stay as they are. The pipeline adds three internal states that the UI groups under them: `Ready` (tailored, shown as Approved), `NeedsInput` and `Submitting` (both shown as Approved with a badge).

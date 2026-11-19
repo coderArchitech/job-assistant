@@ -83,16 +83,18 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ the types compile with no Android dependency.
   _Done in [#8](https://github.com/coderArchitech/job-assistant/pull/8). `:core:model` compiles as a Kotlin JVM module whose classpath holds only kotlin-stdlib, kotlinx-serialization-core and javax.inject; 12 unit tests cover validation, tiers, statuses and JSON round trips._
 
-- [ ] **T1.03 Create the Room database** (P0) · Depends on T1.02
+- [x] **T1.03 Create the Room database** (P0) · Depends on T1.02 · [#20](https://github.com/coderArchitech/job-assistant/pull/20)
   Entities, DAOs, JSON type converters, unique constraints (`Job` on source + externalId, `Application` on jobId), indexes on `dedupeHash` and `status`, and an exported schema.
   _Done when:_ DAO tests pass on an in-memory database and the schema JSON is committed.
 
 - [ ] **T1.04 Add migration testing** (P0) · Depends on T1.03
   `MigrationTestHelper` setup and a CI check that every schema version has a migration test.
+  _Note from T1.03:_ Schemas are exported to `core/data/schemas/<db class>/<version>.json` by the Room Gradle plugin. `AgentDatabase.VERSION` is the single source of the version.
   _Done when:_ adding a schema version without a migration test fails CI.
 
 - [ ] **T1.05 Implement status transitions** (P0) · Depends on T1.03
   Repository methods that move a job between statuses in one transaction, with the expected current status as a precondition (`UPDATE … WHERE status = ?`).
+  _Note from T1.03:_ `JobDao`, `ApplicationDao`, `OutreachMessageDao` and `RunDao` are insert and read only on purpose; add the guarded `UPDATE … WHERE status = ?` transitions here, and keep a plain `@Update` off these entities.
   _Done when:_ a test shows two concurrent transitions of the same job cannot both succeed.
 
 - [x] **T1.06 Add settings storage** (P0) · Depends on T0.02 · [#10](https://github.com/coderArchitech/job-assistant/pull/10)
@@ -140,6 +142,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   Write a `UsageRecord` for every call, priced from the price table. Before each call, refuse it if month-to-date spend plus a worst-case estimate would exceed the cap; then pause the agent and show the reason on Home.
   _Note from T1.06:_ Fail closed: if `SettingsRepository.settings` fails (it does after repeated I/O errors), pause AI calls rather than assume a budget.
   _Note from T1.11:_ `TokenUsage` splits input into uncached, cache-read and cache-write tokens (cache writes cost more than base input on Anthropic). `UsageRecord` in `:core:model` has only `cachedTokens`, so add a cache-write count before pricing. Return `LlmResult.Blocked(BUDGET_EXCEEDED)` for a refused call. `FakeLlmProvider` and `LlmProviderContract` sit in `:ai` tests; move them to a shared test-fixtures source set if the guard's tests live outside `:ai`.
+  _Note from T1.03:_ `UsageRecordDao.sumCostMicrosSince(from)` gives month-to-date spend. The `usage_record` table has only `cachedTokens`; add the cache-write column with a schema version and migration test (T1.04) before pricing.
   _Done when:_ a test with a $1 cap refuses the call that would cross it.
 
 - [ ] **T1.15 Add the prompt guard** (P0) · Depends on T1.07, T1.11

@@ -26,6 +26,7 @@ junit4 = "4.13.2"
 protobuf = "4.36.2" # protobuf-javalite runtime and protoc must match
 protobuf-plugin = "0.10.0"
 robolectric = "4.18"
+room = "2.8.4"
 tink = "1.24.0"
 # Android runtime jar Robolectric 4.18 uses for SDK 36; fetched by Gradle so tests run offline.
 robolectric-android-all = "16-robolectric-13921718-2-i7"
@@ -41,6 +42,9 @@ androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx
 androidx-hilt-lifecycle-viewmodel-compose = { module = "androidx.hilt:hilt-lifecycle-viewmodel-compose", version.ref = "androidx-hilt" }
 androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "androidx-lifecycle" }
 androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "androidx-lifecycle" }
+androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 androidx-test-core = { module = "androidx.test:core-ktx", version.ref = "androidx-test-core" }
 androidx-test-ext-junit = { module = "androidx.test.ext:junit-ktx", version.ref = "androidx-test-ext-junit" }
 androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidx-test-runner" }
@@ -80,6 +84,7 @@ ktlint-gradlePlugin = { module = "org.jlleitschuh.gradle:ktlint-gradle", version
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+androidx-room = { id = "androidx.room", version.ref = "room" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
