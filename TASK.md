@@ -92,7 +92,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Note from T1.03:_ Schemas are exported to `core/data/schemas/<db class>/<version>.json` by the Room Gradle plugin. `AgentDatabase.VERSION` is the single source of the version.
   _Done when:_ adding a schema version without a migration test fails CI.
 
-- [ ] **T1.05 Implement status transitions** (P0) · Depends on T1.03
+- [x] **T1.05 Implement status transitions** (P0) · Depends on T1.03 · [#21](https://github.com/coderArchitech/job-assistant/pull/21)
   Repository methods that move a job between statuses in one transaction, with the expected current status as a precondition (`UPDATE … WHERE status = ?`).
   _Note from T1.03:_ `JobDao`, `ApplicationDao`, `OutreachMessageDao` and `RunDao` are insert and read only on purpose; add the guarded `UPDATE … WHERE status = ?` transitions here, and keep a plain `@Update` off these entities.
   _Done when:_ a test shows two concurrent transitions of the same job cannot both succeed.
