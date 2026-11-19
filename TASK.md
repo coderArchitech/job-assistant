@@ -87,7 +87,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   Entities, DAOs, JSON type converters, unique constraints (`Job` on source + externalId, `Application` on jobId), indexes on `dedupeHash` and `status`, and an exported schema.
   _Done when:_ DAO tests pass on an in-memory database and the schema JSON is committed.
 
-- [ ] **T1.04 Add migration testing** (P0) · Depends on T1.03
+- [x] **T1.04 Add migration testing** (P0) · Depends on T1.03 · [#22](https://github.com/coderArchitech/job-assistant/pull/22)
   `MigrationTestHelper` setup and a CI check that every schema version has a migration test.
   _Note from T1.03:_ Schemas are exported to `core/data/schemas/<db class>/<version>.json` by the Room Gradle plugin. `AgentDatabase.VERSION` is the single source of the version.
   _Done when:_ adding a schema version without a migration test fails CI.
