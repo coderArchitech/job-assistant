@@ -3,6 +3,12 @@ package com.coderarchitech.jobassistant.core.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.dataStoreFile
+import com.coderarchitech.jobassistant.core.data.repository.ApplicationRepository
+import com.coderarchitech.jobassistant.core.data.repository.JobRepository
+import com.coderarchitech.jobassistant.core.data.repository.RoomApplicationRepository
+import com.coderarchitech.jobassistant.core.data.repository.RoomJobRepository
+import com.coderarchitech.jobassistant.core.data.repository.RoomTransactionRunner
+import com.coderarchitech.jobassistant.core.data.repository.TransactionRunner
 import com.coderarchitech.jobassistant.core.data.settings.AUTO_SEND_CONSENT_FILE_NAME
 import com.coderarchitech.jobassistant.core.data.settings.AutoSendConsentMarker
 import com.coderarchitech.jobassistant.core.data.settings.DataStoreSettingsRepository
@@ -32,6 +38,15 @@ internal abstract class DataModule {
 
     @Binds
     abstract fun bindSettingsRepository(impl: DataStoreSettingsRepository): SettingsRepository
+
+    @Binds
+    abstract fun bindJobRepository(impl: RoomJobRepository): JobRepository
+
+    @Binds
+    abstract fun bindApplicationRepository(impl: RoomApplicationRepository): ApplicationRepository
+
+    @Binds
+    abstract fun bindTransactionRunner(impl: RoomTransactionRunner): TransactionRunner
 
     companion object {
         /** One DataStore per file per process, so it is a singleton. */

@@ -20,11 +20,12 @@ data class StatusCount(
 )
 
 /**
- * Reads jobs and inserts new ones. There is deliberately no `@Update` and no status `UPDATE` here:
- * status changes go through repository transition methods with an expected-status precondition
- * (task T1.05), so a stale writer can never overwrite a newer status.
+ * Reads jobs and inserts new ones. There is deliberately no `@Update`: the only way to change a status
+ * is [compareAndSetStatus], and only `JobRepository` calls it, after checking the move against
+ * `JobTransitions`. Nothing else may write a status, so a stale writer can never overwrite a newer one.
  */
 @Dao
+@Suppress("TooManyFunctions") // A DAO is a list of queries; the job table has that many.
 interface JobDao {
     /** Inserts a job and returns its id, or -1 if (source, externalId) already exists. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
@@ -67,6 +68,22 @@ interface JobDao {
     /** Emits every job, newest first, whenever the table changes. */
     @Query("SELECT * FROM job ORDER BY firstSeenAt DESC, id DESC")
     fun observeAll(): Flow<List<JobEntity>>
+
+    /** The status of the job with [id], or null if there is no such job. */
+    @Query("SELECT status FROM job WHERE id = :id")
+    suspend fun getStatus(id: Long): JobStatus?
+
+    /**
+     * Sets the status to [to] only if it is still [from], in one statement, and returns the number of
+     * rows changed (1, or 0 if the job is missing or another writer moved it first). Call it only
+     * through `JobRepository`, which validates the move.
+     */
+    @Query("UPDATE job SET status = :to WHERE id = :id AND status = :from")
+    suspend fun compareAndSetStatus(
+        id: Long,
+        from: JobStatus,
+        to: JobStatus,
+    ): Int
 
     /** Emits the number of jobs per status; statuses with no job are absent. */
     @Query("SELECT status AS status, COUNT(*) AS count FROM job GROUP BY status")

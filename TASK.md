@@ -20,7 +20,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 | [M3 Portals and applying](#m3-portals-and-applying) | T3.01–T3.25 | Naukri and Greenhouse applied end to end; SMS OTP login works; sessions reused |
 | [M4 Outreach and reporting](#m4-outreach-and-reporting) | T4.01–T4.15 | Gmail send with approval; report counts match; budget cap pauses runs |
 | [M5 Hardening and beta](#m5-hardening-and-beta) | T5.01–T5.16 | Security review closed; Play policy pre-check passed; 20-user beta live |
-| [Decisions](#open-decisions) | D01–D12 | Each decision recorded in the Technical Design |
+| [Decisions](#open-decisions) | D01–D13 | Each decision recorded in the Technical Design |
 
 ---
 
@@ -92,7 +92,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Note from T1.03:_ Schemas are exported to `core/data/schemas/<db class>/<version>.json` by the Room Gradle plugin. `AgentDatabase.VERSION` is the single source of the version.
   _Done when:_ adding a schema version without a migration test fails CI.
 
-- [ ] **T1.05 Implement status transitions** (P0) · Depends on T1.03
+- [x] **T1.05 Implement status transitions** (P0) · Depends on T1.03 · [#21](https://github.com/coderArchitech/job-assistant/pull/21)
   Repository methods that move a job between statuses in one transaction, with the expected current status as a precondition (`UPDATE … WHERE status = ?`).
   _Note from T1.03:_ `JobDao`, `ApplicationDao`, `OutreachMessageDao` and `RunDao` are insert and read only on purpose; add the guarded `UPDATE … WHERE status = ?` transitions here, and keep a plain `@Update` off these entities.
   _Done when:_ a test shows two concurrent transitions of the same job cannot both succeed.
@@ -289,6 +289,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 - [ ] **T3.05 Build the tailor worker** (P0) · Depends on T3.02, T2.20
   Eager tailoring for High match in the background; lazy tailoring for Partial match after approval; drafts editable in Review and Job detail and marked `editedByUser`.
+  _Note from T1.05 (D13):_ Writing drafts must not change the job's status. A High-match job stays `SCORED` until the user approves it; the worker moves a job to `READY` (via `JobRepository.transition`) only from `APPROVED`.
   _Done when:_ High-match drafts are ready in Review after a background run.
 
 ### WebView runtime
@@ -362,6 +363,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 - [ ] **T3.21 Build the apply session** (P0) · Depends on T3.13, T3.15, T3.16, T3.18, T3.20
   The apply flow from the design: take a cap slot, ensure a session, classify the page, fill, check for CAPTCHAs, stop before submit by default (or write `SUBMITTING`, click and confirm in auto-submit mode, which a portal allows only after 20 manual submissions, per D11), save a proof screenshot, write `SUBMITTED`. A `SUBMITTING` record left by a crash goes to "Check manually" and is never retried.
+  _Note from T1.05:_ Settle a live attempt with `ApplicationRepository.markSubmitted`, `markFailed` or `markCheckManually`, passing the attempt ID. Change the application and its job in one `TransactionRunner.run { … }`, calling `requireMoved()` on each result. Call `recoverInterruptedSubmissions()` once at process start, before any session can begin. A failed application is final, so retrying a failed apply needs a new decision.
   _Done when:_ killing the app mid-submit never produces a second submission in 20 trials.
 
 - [ ] **T3.22 Build the apply foreground service** (P0) · Depends on T3.21, D04
@@ -420,6 +422,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 - [ ] **T4.08 Build the Applications screen** (P0) · Depends on T3.21
   Status pipeline, proof screenshots, "Check manually" and "Apply manually" lists, manual status updates.
+  _Note from T1.05:_ Manual status changes go through `JobRepository.transitionManually` (any shown status; from `SUBMITTING` only Applied or Failed). Resolve "Check manually" with `ApplicationRepository.confirmSubmittedManually` or `markFailedManually`, in one transaction with the job's change.
   _Done when:_ every status from Found to Offer can be reached and edited by hand.
 
 - [ ] **T4.09 Build the daily report** (P0) · Depends on T4.08, T1.14
@@ -551,3 +554,4 @@ Record each decision in the Technical Design's "Open technical questions" sectio
 | D10 | Hacker News regex pre-filter strictness. **Decided 2026-11-18 (owner): strict:** a comment needs a role keyword and (remote or the user's location); at most 100 comments a month go to the model. Tune both on one real thread in T2.08 | End of M2 | T2.08 |
 | D11 | Auto-submit at launch, or only after 20 manual approvals (PRD). **Decided 2026-11-18 (owner): only after 20 manual submissions on that portal;** until then the per-portal auto-submit toggle is disabled with the count shown | End of M3 | T3.19, T3.21 |
 | D12 | Next portals for dedicated adapters (Wellfound, Cutshort, Hirist, Indeed India) (PRD). **Decided 2026-11-18 (owner): Cutshort and Hirist first** (Indian tech jobs); Wellfound and Indeed India later | End of M3 | Phase 2 |
+| D13 | Whether background tailoring moves a High-match job to `READY` before approval. **Decided 2026-11-19 (owner): no;** drafts are written while the job stays `SCORED`, and `READY` is reachable only from `APPROVED`, so "Approved" always means the user approved it | Start of M1 | T1.05, T3.05 |

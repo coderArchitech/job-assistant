@@ -35,6 +35,22 @@ abstract class DatabaseTest {
         db.close()
     }
 
+    /**
+     * Runs [block] on a throwaway file-backed database. Unlike the in-memory one, a file database has
+     * several connections (WAL mode), so concurrent writers really race instead of queueing on one.
+     */
+    protected suspend fun <T> withFileDatabase(block: suspend (AgentDatabase) -> T): T {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = "race-${System.nanoTime()}.db"
+        val fileDb = Room.databaseBuilder(context, AgentDatabase::class.java, name).build()
+        try {
+            return block(fileDb)
+        } finally {
+            fileDb.close()
+            context.deleteDatabase(name)
+        }
+    }
+
     /** Fails the test unless [block] is rejected by a database constraint (unique, foreign key). */
     protected suspend fun assertConstraintViolation(block: suspend () -> Unit) {
         try {
