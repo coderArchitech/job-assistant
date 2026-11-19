@@ -11,6 +11,7 @@ import com.coderarchitech.jobassistant.core.data.db.entity.MatchResultEntity
 import com.coderarchitech.jobassistant.core.model.DraftKind
 import com.coderarchitech.jobassistant.core.model.JobStatus
 import kotlinx.coroutines.flow.Flow
+import java.time.Instant
 
 /** The number of jobs in one [status]. */
 data class StatusCount(
@@ -98,9 +99,41 @@ interface MatchResultDao {
 /** Reads and writes tailored drafts. */
 @Dao
 interface DraftDao {
-    /** Inserts a draft, replacing any existing draft of the same kind for the job. */
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(draft: DraftEntity): Long
+    /**
+     * Inserts a draft and returns its id, or -1 if the job already has a draft of that kind. It never
+     * overwrites: a draft the user edited must not be lost to a new generation.
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(draft: DraftEntity): Long
+
+    /**
+     * Replaces the text of a generated draft with newly generated text, keeping its id. A draft the
+     * user has edited is left alone. Returns the number of rows changed: 1, or 0 if there is no draft
+     * of that kind or the user edited it.
+     */
+    @Query(
+        "UPDATE draft SET content = :content, unknownFields = :unknownFields, createdAt = :createdAt " +
+            "WHERE jobId = :jobId AND kind = :kind AND editedByUser = 0",
+    )
+    suspend fun regenerate(
+        jobId: Long,
+        kind: DraftKind,
+        content: String,
+        unknownFields: List<String>,
+        createdAt: Instant,
+    ): Int
+
+    /** Saves the user's edit and marks the draft as edited. Returns the number of rows changed (0 or 1). */
+    @Query(
+        "UPDATE draft SET content = :content, unknownFields = :unknownFields, editedByUser = 1 " +
+            "WHERE jobId = :jobId AND kind = :kind",
+    )
+    suspend fun saveEdit(
+        jobId: Long,
+        kind: DraftKind,
+        content: String,
+        unknownFields: List<String>,
+    ): Int
 
     /** The draft of [kind] for [jobId], or null. */
     @Query("SELECT * FROM draft WHERE jobId = :jobId AND kind = :kind")

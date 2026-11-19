@@ -163,17 +163,64 @@ class JobDaosTest : DatabaseTest() {
         }
 
     @Test
-    fun aJobHasOneDraftPerKindAndSavingAgainReplacesIt() =
+    fun aJobHasOneDraftPerKindAndInsertingAgainNeverOverwritesIt() =
         runTest {
             val job = insertJob()
             val dao = db.draftDao()
-            dao.upsert(sampleDraft(job, DraftKind.COVER_LETTER, "first").toEntity())
-            dao.upsert(sampleDraft(job, DraftKind.COVER_LETTER, "second").toEntity())
-            dao.upsert(sampleDraft(job, DraftKind.EMAIL, "mail").toEntity())
+            val first = dao.insert(sampleDraft(job, DraftKind.COVER_LETTER, "first").toEntity())
+            val again = dao.insert(sampleDraft(job, DraftKind.COVER_LETTER, "second").toEntity())
+            dao.insert(sampleDraft(job, DraftKind.EMAIL, "mail").toEntity())
 
-            assertEquals("second", dao.get(job, DraftKind.COVER_LETTER)?.content)
-            assertEquals(listOf("second", "mail"), dao.observeForJob(job).first().map { it.content })
+            assertEquals(-1L, again)
+            assertEquals(first, dao.get(job, DraftKind.COVER_LETTER)?.id)
+            assertEquals("first", dao.get(job, DraftKind.COVER_LETTER)?.content)
+            assertEquals(listOf("first", "mail"), dao.observeForJob(job).first().map { it.content })
             assertEquals(listOf("Expected CTC"), dao.get(job, DraftKind.EMAIL)?.unknownFields)
+        }
+
+    @Test
+    fun regeneratingReplacesAGeneratedDraftButKeepsItsId() =
+        runTest {
+            val job = insertJob()
+            val dao = db.draftDao()
+            val id = dao.insert(sampleDraft(job, DraftKind.COVER_LETTER, "first").toEntity())
+
+            val changed = dao.regenerate(job, DraftKind.COVER_LETTER, "second", emptyList(), T0.plusSeconds(60))
+
+            assertEquals(1, changed)
+            val draft = dao.get(job, DraftKind.COVER_LETTER)
+            assertEquals(id, draft?.id)
+            assertEquals("second", draft?.content)
+            assertEquals(emptyList<String>(), draft?.unknownFields)
+            assertEquals(T0.plusSeconds(60), draft?.createdAt)
+        }
+
+    @Test
+    fun aDraftTheUserEditedIsNeverRegeneratedOver() =
+        runTest {
+            val job = insertJob()
+            val dao = db.draftDao()
+            dao.insert(sampleDraft(job, DraftKind.COVER_LETTER, "generated").toEntity())
+
+            assertEquals(1, dao.saveEdit(job, DraftKind.COVER_LETTER, "my words", emptyList()))
+            val changed = dao.regenerate(job, DraftKind.COVER_LETTER, "regenerated", listOf("x"), T0)
+
+            assertEquals(0, changed)
+            val draft = dao.get(job, DraftKind.COVER_LETTER)
+            assertEquals("my words", draft?.content)
+            assertEquals(true, draft?.editedByUser)
+            assertEquals(emptyList<String>(), draft?.unknownFields)
+        }
+
+    @Test
+    fun editingOrRegeneratingAMissingDraftChangesNothing() =
+        runTest {
+            val job = insertJob()
+            val dao = db.draftDao()
+
+            assertEquals(0, dao.saveEdit(job, DraftKind.EMAIL, "x", emptyList()))
+            assertEquals(0, dao.regenerate(job, DraftKind.EMAIL, "x", emptyList(), T0))
+            assertNull(dao.get(job, DraftKind.EMAIL))
         }
 
     @Test
@@ -194,7 +241,7 @@ class JobDaosTest : DatabaseTest() {
         runTest {
             val job = insertJob()
             db.matchResultDao().upsert(sampleMatch(job).toEntity())
-            db.draftDao().upsert(sampleDraft(job).toEntity())
+            db.draftDao().insert(sampleDraft(job).toEntity())
             db.decisionDao().insert(sampleDecision(job).toEntity())
 
             db.openHelper.writableDatabase.execSQL("DELETE FROM job WHERE id = $job")

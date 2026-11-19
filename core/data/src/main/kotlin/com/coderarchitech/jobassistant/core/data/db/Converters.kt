@@ -28,8 +28,9 @@ import java.time.LocalDate
 @Suppress("TooManyFunctions") // One pair per stored type; splitting them would only scatter the registry.
 object Converters {
     /**
-     * Older rows must keep decoding when a field is added (new fields have defaults), and a row
-     * written by a newer app version (restored from backup) must not crash an older one.
+     * Rows written before a field was added must keep decoding (new fields have defaults), so a
+     * field added later never needs a data migration. Unknown keys are ignored. Enum constants are
+     * stored by name and are never renamed or removed (see `StoredDbEnumNamesTest`).
      */
     private val json =
         Json {
