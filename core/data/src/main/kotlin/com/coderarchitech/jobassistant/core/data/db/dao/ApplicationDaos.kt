@@ -11,8 +11,8 @@ import kotlinx.coroutines.flow.Flow
 import java.time.Instant
 
 /**
- * Reads applications and inserts new ones. Like [JobDao], it has no `@Update`: the
- * `SUBMITTING` and `SUBMITTED` writes go through guarded transitions (tasks T1.05 and T3.21), so an
+ * Reads applications and inserts new ones. Like [JobDao], it has no `@Update`: the only status
+ * writes are the compare-and-set queries below, called only through `ApplicationRepository`, so an
  * attempt can never be rewritten by a stale caller.
  */
 @Dao
@@ -32,6 +32,34 @@ interface ApplicationDao {
     /** Emits every application, newest first, whenever the table changes. */
     @Query("SELECT * FROM application ORDER BY id DESC")
     fun observeAll(): Flow<List<ApplicationEntity>>
+
+    /**
+     * Sets the status of the job's application to [to] only if it is still [from] and, when [attemptId]
+     * is given, only if it belongs to that attempt, in one statement. A non-null [submittedAt] or
+     * [proofPath] is stored; a null one leaves the stored value alone. Returns the rows changed (1 or 0).
+     * Call it only through `ApplicationRepository`, which validates the move.
+     */
+    @Query(
+        "UPDATE application SET status = :to, submittedAt = COALESCE(:submittedAt, submittedAt), " +
+            "proofPath = COALESCE(:proofPath, proofPath) " +
+            "WHERE jobId = :jobId AND status = :from AND (:attemptId IS NULL OR attemptId = :attemptId)",
+    )
+    @Suppress("LongParameterList") // One SQL statement with one named value per column it touches.
+    suspend fun compareAndSetStatus(
+        jobId: Long,
+        from: ApplicationStatus,
+        to: ApplicationStatus,
+        submittedAt: Instant?,
+        proofPath: String?,
+        attemptId: String?,
+    ): Int
+
+    /** Moves every application in [from] to [to] and returns how many moved; see `recoverInterruptedSubmissions`. */
+    @Query("UPDATE application SET status = :to WHERE status = :from")
+    suspend fun compareAndSetAllStatus(
+        from: ApplicationStatus,
+        to: ApplicationStatus,
+    ): Int
 }
 
 /** Reads outreach messages and inserts new ones; status changes follow the same rule as [ApplicationDao]. */
