@@ -19,7 +19,11 @@ internal object DatabaseModule {
     @Singleton
     fun provideDatabase(
         @ApplicationContext context: Context,
-    ): AgentDatabase = Room.databaseBuilder(context, AgentDatabase::class.java, AgentDatabase.NAME).build()
+    ): AgentDatabase =
+        Room
+            .databaseBuilder(context, AgentDatabase::class.java, AgentDatabase.NAME)
+            .also { builder -> AgentMigrations.ALL.forEach { builder.addMigrations(it) } }
+            .build()
 
     @Provides
     fun provideProfileDao(db: AgentDatabase) = db.profileDao()
