@@ -168,7 +168,7 @@ Rules for reading and changing the file:
 
 **Room database** (`:core:data`, task T1.03). `AgentDatabase` (`agent.db`, version 1) has one table per entity above, named in snake case (`job`, `match_result`, `outreach_message` and so on). Each table has an entity class, `toEntity()` and `toModel()` mappers to the pure `:core:model` type, and a DAO under `core.data.db`. The schema for every version is exported to `core/data/schemas/` and committed; the Room Gradle plugin writes it. Rules the code follows:
 
-- **No destructive migration.** The builder never calls `fallbackToDestructiveMigration`, so a missing migration fails loudly instead of wiping the user's history (migration tests are T1.04).
+- **No destructive migration.** The builder never calls `fallbackToDestructiveMigration`, so a missing migration fails loudly instead of wiping the user's history. Migrations live in `AgentMigrations.ALL`, which the builder and the tests share. `MigrationTest` (Robolectric, so it runs on every push) builds each earlier version from its exported schema with `MigrationTestHelper` and checks Room accepts the migrated result. `scripts/ci/check_migration_tests.py` fails CI if the newest exported schema differs from `AgentDatabase.VERSION`, if versions have gaps, or if a version `M` has no `migrateNToM` test.
 - **Column choices.**
   - Times are epoch milliseconds, so sub-millisecond precision is dropped; compare timestamps only after truncating to milliseconds, and key guards on status or attempt ID, never on a timestamp.
   - Dates are ISO text, enums are stored by constant name, and lists, maps and value types are JSON through one `Converters` object (unknown JSON keys are ignored and new fields have defaults).
