@@ -1,0 +1,131 @@
+package com.coderarchitech.jobassistant.core.data.db.dao
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import com.coderarchitech.jobassistant.core.data.db.entity.DecisionEntity
+import com.coderarchitech.jobassistant.core.data.db.entity.DraftEntity
+import com.coderarchitech.jobassistant.core.data.db.entity.JobEntity
+import com.coderarchitech.jobassistant.core.data.db.entity.MatchResultEntity
+import com.coderarchitech.jobassistant.core.model.DraftKind
+import com.coderarchitech.jobassistant.core.model.JobStatus
+import kotlinx.coroutines.flow.Flow
+
+/** The number of jobs in one [status]. */
+data class StatusCount(
+    val status: JobStatus,
+    val count: Int,
+)
+
+/**
+ * Reads jobs and inserts new ones. There is deliberately no `@Update` and no status `UPDATE` here:
+ * status changes go through repository transition methods with an expected-status precondition
+ * (task T1.05), so a stale writer can never overwrite a newer status.
+ */
+@Dao
+interface JobDao {
+    /** Inserts a job and returns its id, or -1 if (source, externalId) already exists. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(job: JobEntity): Long
+
+    /** The job with [id], or null. */
+    @Query("SELECT * FROM job WHERE id = :id")
+    suspend fun getById(id: Long): JobEntity?
+
+    /** Emits the job whenever it changes. */
+    @Query("SELECT * FROM job WHERE id = :id")
+    fun observeById(id: Long): Flow<JobEntity?>
+
+    /** Dedupe step 1: the same posting seen again from the same source. */
+    @Query("SELECT * FROM job WHERE source = :source AND externalId = :externalId")
+    suspend fun findBySourceAndExternalId(
+        source: String,
+        externalId: String,
+    ): JobEntity?
+
+    /** Dedupe step 2: the same canonical URL. */
+    @Query("SELECT * FROM job WHERE canonicalUrl = :canonicalUrl ORDER BY id")
+    suspend fun findByCanonicalUrl(canonicalUrl: String): List<JobEntity>
+
+    /** Dedupe step 3: the same normalized company and title. */
+    @Query("SELECT * FROM job WHERE dedupeHash = :dedupeHash ORDER BY id")
+    suspend fun findByDedupeHash(dedupeHash: String): List<JobEntity>
+
+    /** Jobs in [status], oldest first, for a pipeline stage to pick up. */
+    @Query("SELECT * FROM job WHERE status = :status ORDER BY id LIMIT :limit")
+    suspend fun getByStatus(
+        status: JobStatus,
+        limit: Int,
+    ): List<JobEntity>
+
+    /** Emits jobs in [status], newest first, whenever the table changes. */
+    @Query("SELECT * FROM job WHERE status = :status ORDER BY firstSeenAt DESC, id DESC")
+    fun observeByStatus(status: JobStatus): Flow<List<JobEntity>>
+
+    /** Emits every job, newest first, whenever the table changes. */
+    @Query("SELECT * FROM job ORDER BY firstSeenAt DESC, id DESC")
+    fun observeAll(): Flow<List<JobEntity>>
+
+    /** Emits the number of jobs per status; statuses with no job are absent. */
+    @Query("SELECT status AS status, COUNT(*) AS count FROM job GROUP BY status")
+    fun observeStatusCounts(): Flow<List<StatusCount>>
+}
+
+/** Reads and writes match results. */
+@Dao
+interface MatchResultDao {
+    /** Inserts or replaces the score for a (job, profile version). */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(result: MatchResultEntity)
+
+    /** The score for [jobId] under [profileVersion], or null if it was not scored under that version. */
+    @Query("SELECT * FROM match_result WHERE jobId = :jobId AND profileVersion = :profileVersion")
+    suspend fun get(
+        jobId: Long,
+        profileVersion: Int,
+    ): MatchResultEntity?
+
+    /** The most recent score for [jobId] under any profile version. */
+    @Query("SELECT * FROM match_result WHERE jobId = :jobId ORDER BY profileVersion DESC LIMIT 1")
+    suspend fun getLatestForJob(jobId: Long): MatchResultEntity?
+
+    /** Emits every score made under [profileVersion], best first, whenever the table changes. */
+    @Query("SELECT * FROM match_result WHERE profileVersion = :profileVersion ORDER BY score DESC, jobId")
+    fun observeByProfileVersion(profileVersion: Int): Flow<List<MatchResultEntity>>
+}
+
+/** Reads and writes tailored drafts. */
+@Dao
+interface DraftDao {
+    /** Inserts a draft, replacing any existing draft of the same kind for the job. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(draft: DraftEntity): Long
+
+    /** The draft of [kind] for [jobId], or null. */
+    @Query("SELECT * FROM draft WHERE jobId = :jobId AND kind = :kind")
+    suspend fun get(
+        jobId: Long,
+        kind: DraftKind,
+    ): DraftEntity?
+
+    /** Emits all drafts for a job whenever they change. */
+    @Query("SELECT * FROM draft WHERE jobId = :jobId ORDER BY id")
+    fun observeForJob(jobId: Long): Flow<List<DraftEntity>>
+}
+
+/** Reads and writes approve and reject decisions. */
+@Dao
+interface DecisionDao {
+    /** Records a decision and returns its id. */
+    @Insert
+    suspend fun insert(decision: DecisionEntity): Long
+
+    /** The latest [limit] decisions, newest first; these become examples in scoring prompts. */
+    @Query("SELECT * FROM decision ORDER BY decidedAt DESC, id DESC LIMIT :limit")
+    suspend fun getRecent(limit: Int): List<DecisionEntity>
+
+    /** The most recent decision for [jobId], or null. */
+    @Query("SELECT * FROM decision WHERE jobId = :jobId ORDER BY decidedAt DESC, id DESC LIMIT 1")
+    suspend fun getLatestForJob(jobId: Long): DecisionEntity?
+}
