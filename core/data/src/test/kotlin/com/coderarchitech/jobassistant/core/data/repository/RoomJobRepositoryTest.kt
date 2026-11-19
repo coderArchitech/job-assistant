@@ -1,6 +1,7 @@
 package com.coderarchitech.jobassistant.core.data.repository
 
 import com.coderarchitech.jobassistant.core.data.db.DatabaseTest
+import com.coderarchitech.jobassistant.core.data.db.T0
 import com.coderarchitech.jobassistant.core.data.db.entity.toEntity
 import com.coderarchitech.jobassistant.core.data.db.sampleApplication
 import com.coderarchitech.jobassistant.core.data.db.sampleJob
@@ -12,9 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RoomJobRepositoryTest : DatabaseTest() {
@@ -114,36 +113,45 @@ class RoomJobRepositoryTest : DatabaseTest() {
             assertEquals(TransitionResult.Conflict(JobStatus.REPLIED), result)
         }
 
-    /** Task T1.05 Done when: two concurrent transitions of the same job cannot both succeed. */
+    /**
+     * Task T1.05 Done when: two concurrent transitions of the same job cannot both succeed. It runs on a
+     * file-backed database, where the writers use separate connections and really race.
+     */
     @Test
     fun twoConcurrentTransitionsOfTheSameJobCannotBothSucceed() =
         runBlocking {
-            repeat(ROUNDS) { round ->
-                val id = insertJob(JobStatus.SCORED, externalId = "race-$round")
-                val gate = CompletableDeferred<Unit>()
-                // Half the racers approve and half skip, so the two writers disagree about the outcome.
-                val targets = List(RACERS) { if (it % 2 == 0) JobStatus.APPROVED else JobStatus.SKIPPED }
+            withFileDatabase { raceDb ->
+                val racing = RoomJobRepository(raceDb)
+                repeat(ROUNDS) { round ->
+                    val id =
+                        raceDb.jobDao().insert(
+                            sampleJob(externalId = "race-$round", status = JobStatus.SCORED).toEntity(),
+                        )
+                    val gate = CompletableDeferred<Unit>()
+                    // Half the racers approve and half skip, so the writers disagree about the outcome.
+                    val targets = List(RACERS) { if (it % 2 == 0) JobStatus.APPROVED else JobStatus.SKIPPED }
 
-                val results =
-                    targets
-                        .map { target ->
-                            async(Dispatchers.Default) {
-                                gate.await()
-                                target to repo.transition(id, JobStatus.SCORED, target)
-                            }
-                        }.also { gate.complete(Unit) }
-                        .awaitAll()
+                    val results =
+                        targets
+                            .map { target ->
+                                async(Dispatchers.Default) {
+                                    gate.await()
+                                    target to racing.transition(id, JobStatus.SCORED, target)
+                                }
+                            }.also { gate.complete(Unit) }
+                            .awaitAll()
 
-                val winners = results.filter { it.second == TransitionResult.Moved }
-                assertEquals("round $round: exactly one writer wins", 1, winners.size)
-                val finalStatus = statusOf(id)
-                assertEquals("round $round: the winner's status is stored", winners.single().first, finalStatus)
-                results.filter { it.second != TransitionResult.Moved }.forEach { (_, result) ->
-                    assertEquals(
-                        "round $round: losers see the winner's status",
-                        TransitionResult.Conflict(finalStatus),
-                        result,
-                    )
+                    val winners = results.filter { it.second == TransitionResult.Moved }
+                    assertEquals("round $round: exactly one writer wins", 1, winners.size)
+                    val finalStatus = raceDb.jobDao().getStatus(id)
+                    assertEquals("round $round: the winner's status is stored", winners.single().first, finalStatus)
+                    results.filter { it.second != TransitionResult.Moved }.forEach { (_, result) ->
+                        assertEquals(
+                            "round $round: losers see the winner's status",
+                            TransitionResult.Conflict(finalStatus),
+                            result,
+                        )
+                    }
                 }
             }
         }
@@ -151,19 +159,22 @@ class RoomJobRepositoryTest : DatabaseTest() {
     @Test
     fun twoWorkersMovingAJobToTheSameStatusDoTheWorkOnce() =
         runBlocking {
-            val id = insertJob(JobStatus.APPROVED)
-            val gate = CompletableDeferred<Unit>()
+            withFileDatabase { raceDb ->
+                val racing = RoomJobRepository(raceDb)
+                val id = raceDb.jobDao().insert(sampleJob(status = JobStatus.APPROVED).toEntity())
+                val gate = CompletableDeferred<Unit>()
 
-            val results =
-                List(RACERS) {
-                    async(Dispatchers.Default) {
-                        gate.await()
-                        repo.transition(id, JobStatus.APPROVED, JobStatus.READY)
-                    }
-                }.also { gate.complete(Unit) }.awaitAll()
+                val results =
+                    List(RACERS) {
+                        async(Dispatchers.Default) {
+                            gate.await()
+                            racing.transition(id, JobStatus.APPROVED, JobStatus.READY)
+                        }
+                    }.also { gate.complete(Unit) }.awaitAll()
 
-            assertEquals(1, results.count { it == TransitionResult.Moved })
-            assertEquals(RACERS - 1, results.count { it == TransitionResult.Conflict(JobStatus.READY) })
+                assertEquals(1, results.count { it == TransitionResult.Moved })
+                assertEquals(RACERS - 1, results.count { it == TransitionResult.Conflict(JobStatus.READY) })
+            }
         }
 
     @Test
@@ -175,12 +186,37 @@ class RoomJobRepositoryTest : DatabaseTest() {
             val applications = RoomApplicationRepository(db)
 
             RoomTransactionRunner(db).run {
-                jobs.transition(job, JobStatus.SUBMITTING, JobStatus.APPLIED)
-                applications.markSubmitted(job, ApplicationStatus.SUBMITTING, SUBMITTED_AT, null, "attempt-1")
+                jobs.transition(job, JobStatus.SUBMITTING, JobStatus.APPLIED).requireMoved()
+                applications.markSubmitted(job, "attempt-1", T0, null).requireMoved()
             }
 
             assertEquals(JobStatus.APPLIED, statusOf(job))
             assertEquals(ApplicationStatus.SUBMITTED, db.applicationDao().getByJobId(job)?.status)
+        }
+
+    @Test
+    fun aRefusedSecondWriteRollsBackTheFirstWhenTheResultIsChecked() =
+        runBlocking {
+            val job = insertJob(JobStatus.SUBMITTING)
+            db.applicationDao().insert(sampleApplication(job).toEntity()) // attempt-1
+            val jobs = RoomJobRepository(db)
+            val applications = RoomApplicationRepository(db)
+
+            val failure =
+                try {
+                    RoomTransactionRunner(db).run {
+                        jobs.transition(job, JobStatus.SUBMITTING, JobStatus.APPLIED).requireMoved()
+                        // A stale session: the attempt ID is not the stored one, so this returns AttemptMismatch.
+                        applications.markSubmitted(job, "attempt-0", T0, null).requireMoved()
+                    }
+                    null
+                } catch (expected: TransitionFailedException) {
+                    expected
+                }
+
+            assertEquals(TransitionResult.AttemptMismatch, failure?.result)
+            assertEquals(JobStatus.SUBMITTING, statusOf(job))
+            assertEquals(ApplicationStatus.SUBMITTING, db.applicationDao().getByJobId(job)?.status)
         }
 
     @Test
@@ -192,32 +228,46 @@ class RoomJobRepositoryTest : DatabaseTest() {
             val applications = RoomApplicationRepository(db)
 
             val failure =
-                runCatchingNonCancellation {
+                try {
                     RoomTransactionRunner(db).run {
                         jobs.transition(job, JobStatus.SUBMITTING, JobStatus.APPLIED)
-                        applications.markSubmitted(job, ApplicationStatus.SUBMITTING, SUBMITTED_AT, null, "attempt-1")
+                        applications.markSubmitted(job, "attempt-1", T0, null)
                         error("crash between the two writes")
                     }
+                    null
+                } catch (expected: IllegalStateException) {
+                    expected
                 }
 
-            assertTrue(failure is IllegalStateException)
+            assertEquals("crash between the two writes", failure?.message)
             assertEquals(JobStatus.SUBMITTING, statusOf(job))
             assertEquals(ApplicationStatus.SUBMITTING, db.applicationDao().getByJobId(job)?.status)
         }
 
-    private suspend fun runCatchingNonCancellation(block: suspend () -> Unit): Throwable? =
-        withContext(Dispatchers.Default) {
-            try {
-                block()
-                null
-            } catch (expected: IllegalStateException) {
-                expected
-            }
+    @Test
+    fun aFoundJobWhoseScoringFailedCanBeMarkedFailed() =
+        runBlocking {
+            val id = insertJob(JobStatus.FOUND)
+
+            assertEquals(TransitionResult.Moved, repo.transition(id, JobStatus.FOUND, JobStatus.FAILED))
+            assertEquals(JobStatus.FAILED, statusOf(id))
+        }
+
+    @Test
+    fun aSubmittingAttemptCanOnlyBeSettledByHandNotReapproved() =
+        runBlocking {
+            val id = insertJob(JobStatus.SUBMITTING)
+
+            assertEquals(
+                TransitionResult.NotAllowed(JobStatus.SUBMITTING, JobStatus.APPROVED),
+                repo.transitionManually(id, JobStatus.SUBMITTING, JobStatus.APPROVED),
+            )
+            assertEquals(JobStatus.SUBMITTING, statusOf(id))
+            assertEquals(TransitionResult.Moved, repo.transitionManually(id, JobStatus.SUBMITTING, JobStatus.APPLIED))
         }
 
     private companion object {
         const val ROUNDS = 25
         const val RACERS = 8
-        val SUBMITTED_AT = com.coderarchitech.jobassistant.core.data.db.T0
     }
 }

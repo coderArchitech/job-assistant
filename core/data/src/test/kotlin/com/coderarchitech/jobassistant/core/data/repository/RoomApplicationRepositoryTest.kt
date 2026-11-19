@@ -15,7 +15,6 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class RoomApplicationRepositoryTest : DatabaseTest() {
@@ -27,8 +26,9 @@ class RoomApplicationRepositoryTest : DatabaseTest() {
         externalId: String = "job-${status.name}",
         attemptId: String = "attempt-1",
         proofPath: String? = null,
+        into: com.coderarchitech.jobassistant.core.data.db.AgentDatabase = db,
     ): Long {
-        val job = db.jobDao().insert(sampleJob(externalId = externalId, status = JobStatus.SUBMITTING).toEntity())
+        val job = into.jobDao().insert(sampleJob(externalId = externalId, status = JobStatus.SUBMITTING).toEntity())
         // Built as SUBMITTING, then copied with status and time together: a SUBMITTED application needs both.
         val application =
             sampleApplication(job, status = ApplicationStatus.SUBMITTING).copy(
@@ -37,7 +37,7 @@ class RoomApplicationRepositoryTest : DatabaseTest() {
                 proofPath = proofPath,
                 submittedAt = T0.takeIf { status == ApplicationStatus.SUBMITTED },
             )
-        db.applicationDao().insert(application.toEntity())
+        into.applicationDao().insert(application.toEntity())
         return job
     }
 
@@ -48,8 +48,7 @@ class RoomApplicationRepositoryTest : DatabaseTest() {
         runBlocking {
             val job = insertApplication(ApplicationStatus.SUBMITTING)
 
-            val result =
-                repo.markSubmitted(job, ApplicationStatus.SUBMITTING, T0.plusSeconds(30), "proofs/1.png", "attempt-1")
+            val result = repo.markSubmitted(job, "attempt-1", T0.plusSeconds(30), "proofs/1.png")
 
             assertEquals(TransitionResult.Moved, result)
             val row = stored(job)
@@ -59,52 +58,42 @@ class RoomApplicationRepositoryTest : DatabaseTest() {
         }
 
     @Test
-    fun aStaleSessionCannotConfirmAnotherAttempt() =
+    fun aStaleSessionCannotConfirmOrFailAnotherAttempt() =
         runBlocking {
             val job = insertApplication(ApplicationStatus.SUBMITTING, attemptId = "attempt-2")
 
-            val result = repo.markSubmitted(job, ApplicationStatus.SUBMITTING, T0, null, attemptId = "attempt-1")
-
-            assertEquals(TransitionResult.AttemptMismatch, result)
+            assertEquals(TransitionResult.AttemptMismatch, repo.markSubmitted(job, "attempt-1", T0, null))
+            assertEquals(TransitionResult.AttemptMismatch, repo.markFailed(job, "attempt-1"))
+            assertEquals(TransitionResult.AttemptMismatch, repo.markCheckManually(job, "attempt-1"))
             assertEquals(ApplicationStatus.SUBMITTING, stored(job)?.status)
             assertNull(stored(job)?.submittedAt)
-        }
-
-    @Test
-    fun leavingSubmittingWithoutAnAttemptIdIsAProgrammingError() =
-        runBlocking {
-            val job = insertApplication(ApplicationStatus.SUBMITTING)
-
-            assertThrows(IllegalArgumentException::class.java) {
-                runBlocking { repo.markSubmitted(job, ApplicationStatus.SUBMITTING, T0, null) }
-            }
-            assertThrows(IllegalArgumentException::class.java) {
-                runBlocking { repo.markFailed(job, ApplicationStatus.SUBMITTING) }
-            }
-            assertEquals(ApplicationStatus.SUBMITTING, stored(job)?.status)
         }
 
     @Test
     fun confirmingTwiceMovesOnceAndTheSecondCallSeesSubmitted() =
         runBlocking {
             val job = insertApplication(ApplicationStatus.SUBMITTING)
-            repo.markSubmitted(job, ApplicationStatus.SUBMITTING, T0, null, "attempt-1")
+            repo.markSubmitted(job, "attempt-1", T0, null)
 
-            val second = repo.markSubmitted(job, ApplicationStatus.SUBMITTING, T0.plusSeconds(99), null, "attempt-1")
+            val second = repo.markSubmitted(job, "attempt-1", T0.plusSeconds(99), null)
 
             assertEquals(TransitionResult.Conflict(ApplicationStatus.SUBMITTED), second)
             assertEquals(T0, stored(job)?.submittedAt)
         }
 
     @Test
-    fun aFinalApplicationCannotMoveAgain() =
+    fun aFailedAttemptIsFinal() =
         runBlocking {
             val job = insertApplication(ApplicationStatus.SUBMITTING)
-            repo.markFailed(job, ApplicationStatus.SUBMITTING, "attempt-1")
+            assertEquals(TransitionResult.Moved, repo.markFailed(job, "attempt-1"))
 
             assertEquals(
+                TransitionResult.Conflict(ApplicationStatus.FAILED),
+                repo.markSubmitted(job, "attempt-1", T0, null),
+            )
+            assertEquals(
                 TransitionResult.NotAllowed(ApplicationStatus.FAILED, ApplicationStatus.SUBMITTED),
-                repo.markSubmitted(job, ApplicationStatus.FAILED, T0, null),
+                repo.confirmSubmittedManually(job, ApplicationStatus.FAILED, T0, null),
             )
             assertEquals(ApplicationStatus.FAILED, stored(job)?.status)
         }
@@ -114,10 +103,8 @@ class RoomApplicationRepositoryTest : DatabaseTest() {
         runBlocking {
             val job = db.jobDao().insert(sampleJob().toEntity())
 
-            assertEquals(
-                TransitionResult.NotFound,
-                repo.markFailed(job, ApplicationStatus.CHECK_MANUALLY),
-            )
+            assertEquals(TransitionResult.NotFound, repo.markFailed(job, "attempt-1"))
+            assertEquals(TransitionResult.NotFound, repo.markFailedManually(job, ApplicationStatus.CHECK_MANUALLY))
         }
 
     @Test
@@ -128,13 +115,22 @@ class RoomApplicationRepositoryTest : DatabaseTest() {
             assertEquals(TransitionResult.Moved, repo.markCheckManually(job, "attempt-1"))
             assertEquals(ApplicationStatus.CHECK_MANUALLY, stored(job)?.status)
 
-            // The user looked at the portal and found the application there. No attempt ID is needed.
+            // The user looked at the portal and found the application there.
             assertEquals(
                 TransitionResult.Moved,
-                repo.markSubmitted(job, ApplicationStatus.CHECK_MANUALLY, T0, proofPath = null),
+                repo.confirmSubmittedManually(job, ApplicationStatus.CHECK_MANUALLY, T0, proofPath = null),
             )
             assertEquals("proofs/early.png", stored(job)?.proofPath) // a null proof leaves the stored one alone
             assertEquals(ApplicationStatus.SUBMITTED, stored(job)?.status)
+        }
+
+    @Test
+    fun theUserCanRecordThatACheckedAttemptWasNotSubmitted() =
+        runBlocking {
+            val job = insertApplication(ApplicationStatus.CHECK_MANUALLY)
+
+            assertEquals(TransitionResult.Moved, repo.markFailedManually(job, ApplicationStatus.CHECK_MANUALLY))
+            assertEquals(ApplicationStatus.FAILED, stored(job)?.status)
         }
 
     @Test
@@ -144,9 +140,25 @@ class RoomApplicationRepositoryTest : DatabaseTest() {
 
             assertEquals(
                 TransitionResult.Moved,
-                repo.markSubmitted(job, ApplicationStatus.APPLY_MANUALLY, T0, proofPath = null),
+                repo.confirmSubmittedManually(job, ApplicationStatus.APPLY_MANUALLY, T0, proofPath = null),
             )
             assertEquals(ApplicationStatus.SUBMITTED, stored(job)?.status)
+        }
+
+    @Test
+    fun theUserCannotSettleAnAttemptThatMayStillBeInFlight() =
+        runBlocking {
+            val job = insertApplication(ApplicationStatus.SUBMITTING)
+
+            assertEquals(
+                TransitionResult.NotAllowed(ApplicationStatus.SUBMITTING, ApplicationStatus.SUBMITTED),
+                repo.confirmSubmittedManually(job, ApplicationStatus.SUBMITTING, T0, null),
+            )
+            assertEquals(
+                TransitionResult.NotAllowed(ApplicationStatus.SUBMITTING, ApplicationStatus.FAILED),
+                repo.markFailedManually(job, ApplicationStatus.SUBMITTING),
+            )
+            assertEquals(ApplicationStatus.SUBMITTING, stored(job)?.status)
         }
 
     @Test
@@ -172,7 +184,7 @@ class RoomApplicationRepositoryTest : DatabaseTest() {
             val job = insertApplication(ApplicationStatus.SUBMITTING)
             repo.recoverInterruptedSubmissions()
 
-            val lateConfirmation = repo.markSubmitted(job, ApplicationStatus.SUBMITTING, T0, null, "attempt-1")
+            val lateConfirmation = repo.markSubmitted(job, "attempt-1", T0, null)
 
             assertEquals(TransitionResult.Conflict(ApplicationStatus.CHECK_MANUALLY), lateConfirmation)
         }
@@ -180,19 +192,22 @@ class RoomApplicationRepositoryTest : DatabaseTest() {
     @Test
     fun twoSessionsConfirmingTheSameAttemptCannotBothSucceed() =
         runBlocking {
-            val job = insertApplication(ApplicationStatus.SUBMITTING)
-            val gate = CompletableDeferred<Unit>()
+            withFileDatabase { raceDb ->
+                val job = insertApplication(ApplicationStatus.SUBMITTING, into = raceDb)
+                val racing = RoomApplicationRepository(raceDb)
+                val gate = CompletableDeferred<Unit>()
 
-            val results =
-                List(RACERS) {
-                    async(Dispatchers.Default) {
-                        gate.await()
-                        repo.markSubmitted(job, ApplicationStatus.SUBMITTING, T0, null, "attempt-1")
-                    }
-                }.also { gate.complete(Unit) }.awaitAll()
+                val results =
+                    List(RACERS) {
+                        async(Dispatchers.Default) {
+                            gate.await()
+                            racing.markSubmitted(job, "attempt-1", T0, null)
+                        }
+                    }.also { gate.complete(Unit) }.awaitAll()
 
-            assertEquals(1, results.count { it == TransitionResult.Moved })
-            assertEquals(ApplicationStatus.SUBMITTED, stored(job)?.status)
+                assertEquals(1, results.count { it == TransitionResult.Moved })
+                assertEquals(ApplicationStatus.SUBMITTED, raceDb.applicationDao().getByJobId(job)?.status)
+            }
         }
 
     private companion object {

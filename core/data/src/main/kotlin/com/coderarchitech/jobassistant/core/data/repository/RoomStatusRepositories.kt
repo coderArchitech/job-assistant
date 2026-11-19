@@ -66,46 +66,53 @@ internal class RoomApplicationRepository
     ) : ApplicationRepository {
         override suspend fun markSubmitted(
             jobId: Long,
-            from: ApplicationStatus,
+            attemptId: String,
             submittedAt: Instant,
             proofPath: String?,
-            attemptId: String?,
-        ): TransitionResult<ApplicationStatus> {
-            requireAttemptWhenSubmitting(from, attemptId)
-            return move(jobId, from, ApplicationStatus.SUBMITTED, submittedAt, proofPath, attemptId)
-        }
+        ): TransitionResult<ApplicationStatus> =
+            move(jobId, ApplicationStatus.SUBMITTING, ApplicationStatus.SUBMITTED, submittedAt, proofPath, attemptId)
 
         override suspend fun markFailed(
             jobId: Long,
-            from: ApplicationStatus,
-            attemptId: String?,
-        ): TransitionResult<ApplicationStatus> {
-            requireAttemptWhenSubmitting(from, attemptId)
-            return move(jobId, from, ApplicationStatus.FAILED, submittedAt = null, proofPath = null, attemptId)
-        }
+            attemptId: String,
+        ): TransitionResult<ApplicationStatus> =
+            move(jobId, ApplicationStatus.SUBMITTING, ApplicationStatus.FAILED, null, null, attemptId)
 
         override suspend fun markCheckManually(
             jobId: Long,
             attemptId: String,
         ): TransitionResult<ApplicationStatus> =
-            move(
-                jobId,
-                ApplicationStatus.SUBMITTING,
-                ApplicationStatus.CHECK_MANUALLY,
-                submittedAt = null,
-                proofPath = null,
-                attemptId,
-            )
+            move(jobId, ApplicationStatus.SUBMITTING, ApplicationStatus.CHECK_MANUALLY, null, null, attemptId)
+
+        override suspend fun confirmSubmittedManually(
+            jobId: Long,
+            from: ApplicationStatus,
+            submittedAt: Instant,
+            proofPath: String?,
+        ): TransitionResult<ApplicationStatus> =
+            moveManually(jobId, from, ApplicationStatus.SUBMITTED, submittedAt, proofPath)
+
+        override suspend fun markFailedManually(
+            jobId: Long,
+            from: ApplicationStatus,
+        ): TransitionResult<ApplicationStatus> = moveManually(jobId, from, ApplicationStatus.FAILED, null, null)
 
         override suspend fun recoverInterruptedSubmissions(): Int =
             db.applicationDao().compareAndSetAllStatus(ApplicationStatus.SUBMITTING, ApplicationStatus.CHECK_MANUALLY)
 
-        private fun requireAttemptWhenSubmitting(
+        /** A user's change never touches an attempt that may still be in flight. */
+        private suspend fun moveManually(
+            jobId: Long,
             from: ApplicationStatus,
-            attemptId: String?,
-        ) = require(from != ApplicationStatus.SUBMITTING || attemptId != null) {
-            "Leaving SUBMITTING needs the attempt ID, so a stale session cannot touch a newer attempt"
-        }
+            to: ApplicationStatus,
+            submittedAt: Instant?,
+            proofPath: String?,
+        ): TransitionResult<ApplicationStatus> =
+            if (from == ApplicationStatus.SUBMITTING) {
+                TransitionResult.NotAllowed(from, to)
+            } else {
+                move(jobId, from, to, submittedAt, proofPath, attemptId = null)
+            }
 
         private suspend fun move(
             jobId: Long,

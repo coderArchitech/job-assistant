@@ -24,8 +24,8 @@ interface JobRepository {
 
     /**
      * Same as [transition] for a status the user sets by hand (PRD FR12), which may go to any shown
-     * status but never to an internal one. Still fails with [TransitionResult.Conflict] if the job
-     * moved since the user's screen was drawn.
+     * status but never to an internal one, and from `SUBMITTING` only to `APPLIED` or `FAILED`. Still
+     * fails with [TransitionResult.Conflict] if the job moved since the user's screen was drawn.
      */
     suspend fun transitionManually(
         jobId: Long,
@@ -36,39 +36,56 @@ interface JobRepository {
 
 /**
  * Moves applications between statuses. `SUBMITTING` is written before the click and confirmed after;
- * it is never retried automatically (CLAUDE.md rule 5). Every method that leaves `SUBMITTING` takes the
- * attempt ID, so a stale session cannot confirm or fail a newer attempt.
+ * it is never retried automatically (CLAUDE.md rule 5). The methods that settle a live attempt take its
+ * attempt ID, so a stale session cannot confirm or fail a newer attempt; the `…Manually` methods are
+ * for the user settling a record that is no longer in flight, and refuse `SUBMITTING`.
  */
 interface ApplicationRepository {
-    /**
-     * Records a confirmed submission: [from] to `SUBMITTED`, with the time and optional proof
-     * screenshot path. [attemptId] is required when [from] is `SUBMITTING`.
-     */
+    /** Records a confirmed submission of attempt [attemptId]: `SUBMITTING` to `SUBMITTED`. */
     suspend fun markSubmitted(
         jobId: Long,
-        from: ApplicationStatus,
+        attemptId: String,
         submittedAt: Instant,
         proofPath: String?,
-        attemptId: String? = null,
     ): TransitionResult<ApplicationStatus>
 
-    /** Records a failure: [from] to `FAILED`. [attemptId] is required when [from] is `SUBMITTING`. */
+    /** Records that attempt [attemptId] failed before anything was submitted: `SUBMITTING` to `FAILED`. */
     suspend fun markFailed(
         jobId: Long,
-        from: ApplicationStatus,
-        attemptId: String? = null,
+        attemptId: String,
     ): TransitionResult<ApplicationStatus>
 
-    /** Moves one `SUBMITTING` attempt to `CHECK_MANUALLY` because its outcome is unknown. */
+    /** Moves attempt [attemptId] from `SUBMITTING` to `CHECK_MANUALLY` because its outcome is unknown. */
     suspend fun markCheckManually(
         jobId: Long,
         attemptId: String,
     ): TransitionResult<ApplicationStatus>
 
     /**
+     * Records that the user confirmed the application was submitted, from `CHECK_MANUALLY` (they found
+     * it on the portal) or `APPLY_MANUALLY` (they applied there by hand). A null [proofPath] keeps any
+     * stored one. [TransitionResult.NotAllowed] if [from] is `SUBMITTING`.
+     */
+    suspend fun confirmSubmittedManually(
+        jobId: Long,
+        from: ApplicationStatus,
+        submittedAt: Instant,
+        proofPath: String?,
+    ): TransitionResult<ApplicationStatus>
+
+    /**
+     * Records that the user found the application was not submitted, from `CHECK_MANUALLY`.
+     * [TransitionResult.NotAllowed] if [from] is `SUBMITTING`.
+     */
+    suspend fun markFailedManually(
+        jobId: Long,
+        from: ApplicationStatus,
+    ): TransitionResult<ApplicationStatus>
+
+    /**
      * Moves every application still in `SUBMITTING` to `CHECK_MANUALLY` and returns how many moved.
-     * Call it only when no apply session is running (at process start), because it cannot tell a
-     * crashed attempt from a live one.
+     * Call it once at process start, before any apply session can begin, because it cannot tell a
+     * crashed attempt from a live one. The matching jobs stay `SUBMITTING` until the user settles them.
      */
     suspend fun recoverInterruptedSubmissions(): Int
 }
@@ -78,6 +95,23 @@ interface ApplicationRepository {
  * application and its job) commit together or not at all.
  */
 interface TransactionRunner {
-    /** Runs [block] in a transaction; an exception thrown from it rolls back every write it made. */
+    /**
+     * Runs [block] in a transaction; an exception thrown from it rolls back every write it made. The
+     * repositories report a refused or lost move as a return value, not an exception, so call
+     * [requireMoved] on each result inside [block] to roll everything back when one does not move.
+     */
     suspend fun <T> run(block: suspend () -> T): T
+}
+
+/** Thrown by [requireMoved] when a transition did not move; [result] says why. */
+class TransitionFailedException(
+    val result: TransitionResult<*>,
+) : IllegalStateException("The transition did not move: $result")
+
+/**
+ * Throws [TransitionFailedException] unless this result is [TransitionResult.Moved]. Inside
+ * [TransactionRunner.run] it rolls back the whole transaction; catch the exception outside it.
+ */
+fun TransitionResult<*>.requireMoved() {
+    if (this != TransitionResult.Moved) throw TransitionFailedException(this)
 }

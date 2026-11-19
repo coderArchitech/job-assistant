@@ -12,7 +12,7 @@ class TransitionsTest {
     fun jobPipelineEdgesAreExactlyTheDocumentedOnes() {
         val expected =
             mapOf(
-                JobStatus.FOUND to setOf(JobStatus.SCORED),
+                JobStatus.FOUND to setOf(JobStatus.SCORED, JobStatus.FAILED),
                 JobStatus.SCORED to setOf(JobStatus.APPROVED, JobStatus.SKIPPED),
                 JobStatus.APPROVED to setOf(JobStatus.READY, JobStatus.FAILED),
                 JobStatus.READY to setOf(JobStatus.NEEDS_INPUT, JobStatus.SUBMITTING, JobStatus.FAILED),
@@ -74,7 +74,7 @@ class TransitionsTest {
 
     @Test
     fun manualChangesAllowAnyShownStatusExceptTheCurrentOne() {
-        for (from in JobStatus.entries) {
+        for (from in JobStatus.entries.filter { it != JobStatus.SUBMITTING }) {
             for (to in JobStatus.entries) {
                 val expected = from != to && !to.isInternal
                 assertEquals("manual $from -> $to", expected, JobTransitions.isAllowedManually(from, to))
@@ -84,6 +84,14 @@ class TransitionsTest {
         assertTrue(JobTransitions.isAllowedManually(JobStatus.FAILED, JobStatus.APPROVED))
         assertFalse(JobTransitions.isAllowedManually(JobStatus.APPROVED, JobStatus.SUBMITTING))
         assertFalse(JobTransitions.isAllowedManually(JobStatus.APPROVED, JobStatus.READY))
+    }
+
+    @Test
+    fun aSubmittingAttemptCanOnlyBeSettledByHandNotReapproved() {
+        val allowed = JobStatus.entries.filter { JobTransitions.isAllowedManually(JobStatus.SUBMITTING, it) }
+
+        assertEquals(setOf(JobStatus.APPLIED, JobStatus.FAILED), allowed.toSet())
+        assertFalse(JobTransitions.isAllowedManually(JobStatus.SUBMITTING, JobStatus.APPROVED))
     }
 
     @Test

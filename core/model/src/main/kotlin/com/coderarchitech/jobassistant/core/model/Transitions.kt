@@ -11,7 +11,8 @@ package com.coderarchitech.jobassistant.core.model
 object JobTransitions {
     private val pipeline: Map<JobStatus, Set<JobStatus>> =
         mapOf(
-            JobStatus.FOUND to setOf(JobStatus.SCORED),
+            // FAILED: scoring output that stays invalid after one retry (design: AI provider layer).
+            JobStatus.FOUND to setOf(JobStatus.SCORED, JobStatus.FAILED),
             JobStatus.SCORED to setOf(JobStatus.APPROVED, JobStatus.SKIPPED),
             JobStatus.APPROVED to setOf(JobStatus.READY, JobStatus.FAILED),
             JobStatus.READY to setOf(JobStatus.NEEDS_INPUT, JobStatus.SUBMITTING, JobStatus.FAILED),
@@ -34,13 +35,18 @@ object JobTransitions {
     /**
      * True if the user may set [to] by hand (PRD FR12): any status the UI shows, other than the one
      * the job already has. The internal states are never set by hand, so a manual change cannot put a
-     * job into the middle of an apply attempt. A second application for the job is still impossible,
-     * because there is at most one application row per job.
+     * job into the middle of an apply attempt. From `SUBMITTING` (a click in flight, or a crashed
+     * attempt waiting in "Check manually") the user may only settle the attempt, as `APPLIED` or
+     * `FAILED`; they cannot send the job back to `APPROVED` to be applied to again. A second application
+     * for the job is also impossible because there is at most one application row per job.
      */
     fun isAllowedManually(
         from: JobStatus,
         to: JobStatus,
-    ): Boolean = from != to && !to.isInternal
+    ): Boolean =
+        from != to &&
+            !to.isInternal &&
+            (from != JobStatus.SUBMITTING || to == JobStatus.APPLIED || to == JobStatus.FAILED)
 }
 
 /**
