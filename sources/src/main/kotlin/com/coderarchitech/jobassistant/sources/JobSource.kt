@@ -51,6 +51,8 @@ data class RawPosting(
     val compensation: String? = null,
     /** Set by ATS sources; they are preferred as the primary copy when postings are merged. */
     val atsType: AtsType? = null,
+    /** The source's own word for where the work happens, such as `remote` or `hybrid`, when it gives one. */
+    val workplaceType: String? = null,
 ) {
     init {
         require(externalId.isNotBlank()) { "A posting needs an external id" }
