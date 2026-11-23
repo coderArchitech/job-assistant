@@ -46,6 +46,13 @@ interface JobDao {
         externalId: String,
     ): JobEntity?
 
+    /** Which of [externalIds] are stored for [source]. Keep the list under 990: SQLite allows 999 variables. */
+    @Query("SELECT externalId FROM job WHERE source = :source AND externalId IN (:externalIds)")
+    suspend fun existingExternalIds(
+        source: String,
+        externalIds: List<String>,
+    ): List<String>
+
     /** Dedupe step 2: the same canonical URL. */
     @Query("SELECT * FROM job WHERE canonicalUrl = :canonicalUrl ORDER BY id")
     suspend fun findByCanonicalUrl(canonicalUrl: String): List<JobEntity>

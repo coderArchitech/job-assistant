@@ -7,6 +7,8 @@ import com.coderarchitech.jobassistant.core.data.repository.ApplicationRepositor
 import com.coderarchitech.jobassistant.core.data.repository.JobRepository
 import com.coderarchitech.jobassistant.core.data.repository.RoomApplicationRepository
 import com.coderarchitech.jobassistant.core.data.repository.RoomJobRepository
+import com.coderarchitech.jobassistant.core.data.repository.RoomKnownPostings
+import com.coderarchitech.jobassistant.core.data.repository.RoomSourceCursorStore
 import com.coderarchitech.jobassistant.core.data.repository.RoomTransactionRunner
 import com.coderarchitech.jobassistant.core.data.repository.RoomUsageLedger
 import com.coderarchitech.jobassistant.core.data.repository.SettingsBudgetSource
@@ -20,6 +22,8 @@ import com.coderarchitech.jobassistant.core.data.settings.createSettingsDataStor
 import com.coderarchitech.jobassistant.core.data.settings.proto.SettingsProto
 import com.coderarchitech.jobassistant.core.model.BudgetSource
 import com.coderarchitech.jobassistant.core.model.IoDispatcher
+import com.coderarchitech.jobassistant.core.model.KnownPostings
+import com.coderarchitech.jobassistant.core.model.SourceCursorStore
 import com.coderarchitech.jobassistant.core.model.UsageLedger
 import dagger.Binds
 import dagger.Module
@@ -54,6 +58,12 @@ internal abstract class DataModule {
 
     @Binds
     abstract fun bindUsageLedger(impl: RoomUsageLedger): UsageLedger
+
+    @Binds
+    abstract fun bindSourceCursorStore(impl: RoomSourceCursorStore): SourceCursorStore
+
+    @Binds
+    abstract fun bindKnownPostings(impl: RoomKnownPostings): KnownPostings
 
     @Binds
     abstract fun bindBudgetSource(impl: SettingsBudgetSource): BudgetSource
