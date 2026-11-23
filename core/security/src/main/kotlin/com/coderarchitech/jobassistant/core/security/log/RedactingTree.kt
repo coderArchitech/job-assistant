@@ -28,14 +28,17 @@ class RedactingTree(
         message: String,
         t: Throwable?,
     ) {
-        sink(priority, tag ?: DEFAULT_TAG, redactor.redact(message))
+        sink(priority, tag?.let(redactor::redact) ?: DEFAULT_TAG, redactor.redact(message))
     }
 
     private companion object {
         const val DEFAULT_TAG = "JobAssistant"
 
-        /** Logcat drops anything past about 4,000 characters, so long lines are split. */
-        const val MAX_LOGCAT_CHUNK = 4_000
+        /**
+         * Logcat truncates an entry at about 4,000 bytes. A UTF-16 unit takes at most 3 UTF-8
+         * bytes, so 1,300 characters always fit.
+         */
+        const val MAX_LOGCAT_CHUNK = 1_300
 
         fun writeToLogcat(
             priority: Int,

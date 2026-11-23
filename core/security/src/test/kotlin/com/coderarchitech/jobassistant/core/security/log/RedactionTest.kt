@@ -74,6 +74,44 @@ class RedactionTest {
     }
 
     @Test
+    fun anyFieldNameContainingASecretWordIsRedacted() {
+        val cases =
+            mapOf(
+                """{"accessToken":"fake-abc"}""" to """{"accessToken":"[REDACTED]"}""",
+                """{"client_secret": "fake-abc"}""" to """{"client_secret": "[REDACTED]"}""",
+                """{"otp": 482139, "n": 1}""" to """{"otp": "[REDACTED]", "n": 1}""",
+                "password=fake&user=someone" to "password=[REDACTED]&user=someone",
+                "?session_token=fake1&x=1" to "?session_token=[REDACTED]&x=1",
+            )
+        for ((input, expected) in cases) {
+            assertEquals(input, expected, redactor.redact(input))
+        }
+    }
+
+    @Test
+    fun plainKeyAndCodeFieldsAreOrdinaryValues() {
+        val text = """{"key":"cache-1","code":404} ?key=cache-2&code=200"""
+        assertEquals(text, redactor.redact(text))
+    }
+
+    @Test
+    fun theTagIsRedactedToo() {
+        Secret("fake-tag-secret-1").use { registry.register("t", it) }
+        Timber.tag("fake-tag-secret-1").w("hello")
+        assertEquals("[REDACTED]", lines.single().second)
+    }
+
+    @Test
+    fun unregisterAllForgetsOnlyKeysWithThePrefix() {
+        Secret("fake-vault-secret").use { registry.register("vault:A", it) }
+        Secret("fake-otp-code-123").use { registry.register("otp", it) }
+
+        registry.unregisterAll("vault:")
+
+        assertEquals("fake-vault-secret [REDACTED]", redactor.redact("fake-vault-secret fake-otp-code-123"))
+    }
+
+    @Test
     fun ordinaryTextIsLeftAlone() {
         val text = "Scored 42 jobs in 3 batches; 7 High, 12 Partial. Keyboard shortcut: Ctrl+K. Monkey."
         Secret("fake-portal-password-123").use { registry.register("portal/1", it) }
@@ -93,7 +131,7 @@ class RedactionTest {
         registry.unregister("portal/1")
         assertEquals("fake-new-pass [REDACTED]", redactor.redact("fake-new-pass fake-second-pass"))
 
-        registry.clear()
+        registry.unregisterAll("portal/")
         assertEquals("fake-second-pass", redactor.redact("fake-second-pass"))
     }
 

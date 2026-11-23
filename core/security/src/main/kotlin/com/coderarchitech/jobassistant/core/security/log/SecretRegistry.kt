@@ -8,9 +8,12 @@ import javax.inject.Singleton
  * The secrets currently known to this process, so [Redactor] can strip them from log lines by
  * exact match (decision in T1.09: patterns plus a live registry).
  *
- * The vault adds every value it stores or returns and removes it on delete or wipe; the OTP flow
- * adds the last code under its own key. Values are held as [CharArray] copies that are zeroed when
- * removed, and never turned into a String. Thread-safe.
+ * The vault adds every value it stores or returns under `vault:<slot>` and removes it on delete or
+ * wipe; the OTP flow adds the last code under its own key. Values are held as [CharArray] copies
+ * that are zeroed when removed, and never turned into a String. Thread-safe.
+ *
+ * Accepted limits: values shorter than [MIN_LENGTH] are not redacted, and a value that is replaced
+ * or removed stops being redacted at once.
  */
 @Singleton
 class SecretRegistry
@@ -18,6 +21,9 @@ class SecretRegistry
     constructor() {
         private val lock = Any()
         private val values = HashMap<String, CharArray>()
+
+        /** Registered values long enough to redact, longest first; rebuilt on every change. */
+        @Volatile private var snapshot: List<CharArray> = emptyList()
 
         /** Remembers [secret] under [key], replacing (and zeroing) any earlier value for that key. */
         fun register(
@@ -35,53 +41,59 @@ class SecretRegistry
         ) = put(key, chars.copyOf())
 
         /** Forgets and zeroes the value under [key]; does nothing when there is none. */
-        fun unregister(key: String) {
-            synchronized(lock) { values.remove(key) }?.fill('\u0000')
-        }
+        fun unregister(key: String) = removeWhere { it == key }
 
-        /** Forgets and zeroes every value. */
-        fun clear() {
-            val removed = synchronized(lock) { values.values.toList().also { values.clear() } }
-            removed.forEach { it.fill('\u0000') }
-        }
+        /** Forgets and zeroes every value whose key starts with [prefix]. */
+        fun unregisterAll(prefix: String) = removeWhere { it.startsWith(prefix) }
 
         /**
          * Replaces every occurrence of a registered value in [text] with [replacement], longest
-         * value first. Values shorter than [MIN_LENGTH] are skipped, so a short value cannot blank
-         * out ordinary words.
+         * value first.
          */
         fun redact(
             text: String,
             replacement: String,
         ): String {
-            val secrets =
-                synchronized(lock) { values.values.filter { it.size >= MIN_LENGTH }.map { it.copyOf() } }
-                    .sortedByDescending { it.size }
+            val secrets = snapshot
             if (secrets.isEmpty()) return text
-            try {
-                val out = StringBuilder(text.length)
-                var i = 0
-                while (i < text.length) {
-                    val hit = secrets.firstOrNull { text.matchesAt(i, it) }
-                    if (hit != null) {
-                        out.append(replacement)
-                        i += hit.size
-                    } else {
-                        out.append(text[i])
-                        i++
-                    }
+            val out = StringBuilder(text.length)
+            var i = 0
+            while (i < text.length) {
+                val hit = secrets.firstOrNull { text.matchesAt(i, it) }
+                if (hit != null) {
+                    out.append(replacement)
+                    i += hit.size
+                } else {
+                    out.append(text[i])
+                    i++
                 }
-                return out.toString()
-            } finally {
-                secrets.forEach { it.fill('\u0000') }
             }
+            return out.toString()
         }
 
         private fun put(
             key: String,
             copy: CharArray,
         ) {
-            synchronized(lock) { values.put(key, copy) }?.fill('\u0000')
+            val old =
+                synchronized(lock) {
+                    values.put(key, copy).also { rebuildSnapshot() }
+                }
+            old?.fill('\u0000')
+        }
+
+        private fun removeWhere(matches: (String) -> Boolean) {
+            val removed =
+                synchronized(lock) {
+                    val keys = values.keys.filter(matches)
+                    keys.mapNotNull { values.remove(it) }.also { rebuildSnapshot() }
+                }
+            removed.forEach { it.fill('\u0000') }
+        }
+
+        /** Called with [lock] held. */
+        private fun rebuildSnapshot() {
+            snapshot = values.values.filter { it.size >= MIN_LENGTH }.sortedByDescending { it.size }
         }
 
         /** Shared values. */

@@ -65,8 +65,8 @@ internal class TinkVault
                 dataStore.updateData { current ->
                     current.toBuilder().putEntries(slot.name, ByteString.copyFrom(ciphertext)).build()
                 }
-                if (result is VaultPut.StoredAfterReset) result.lost.forEach { registry.unregister(it.name) }
-                registry.register(slot.name, secret)
+                if (result is VaultPut.StoredAfterReset) result.lost.forEach { registry.unregister(it.registryKey()) }
+                registry.register(slot.registryKey(), secret)
                 result
             }
 
@@ -81,7 +81,7 @@ internal class TinkVault
                         val aead = valueAead ?: openExisting(vault)
                         if (aead == null) VaultRead.Unreadable else decrypt(aead, ciphertext, slot)
                     }
-                }.also { if (it is VaultRead.Found) registry.register(slot.name, it.secret) }
+                }.also { if (it is VaultRead.Found) registry.register(slot.registryKey(), it.secret) }
             }
 
         override suspend fun delete(slot: VaultSlot) =
@@ -94,7 +94,7 @@ internal class TinkVault
                         current
                     }
                 }
-                registry.unregister(slot.name)
+                registry.unregister(slot.registryKey())
             }
 
         override suspend fun slots(): Set<VaultSlot> =
@@ -109,7 +109,7 @@ internal class TinkVault
             locked {
                 valueAead = null
                 dataStore.updateData { VaultSerializer.defaultValue }
-                registry.clear()
+                registry.unregisterAll(REGISTRY_PREFIX)
                 keystore("Cannot delete the vault key") { kek.delete() }
             }
 
@@ -267,3 +267,9 @@ private fun Exception.toVaultException(message: String) =
 
 /** Associated data that binds a ciphertext to its slot, so it fails to decrypt anywhere else. */
 internal fun VaultSlot.associatedData(): ByteArray = ("jobassistant/vault/v1|slot|$name").toByteArray(Charsets.UTF_8)
+
+/** Prefix of the vault's keys in the log redaction registry; other owners (the OTP flow) use their own. */
+internal const val REGISTRY_PREFIX = "vault:"
+
+/** This slot's key in the log redaction registry. */
+internal fun VaultSlot.registryKey(): String = REGISTRY_PREFIX + name
