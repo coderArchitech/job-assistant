@@ -185,7 +185,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Note from T2.01:_ Implement `JobSource` with key `greenhouse:<board>`, use `@HttpClientFor(NetworkGroup.JOB_SOURCES)` (it limits each host to 2 requests at a time), skip entries that fail `RawPosting` validation, and throw `IOException` on a failed fetch rather than return an empty list. Set `RawPosting.atsType`.
   _Done when:_ fixture tests pass and a live fetch of one public board works.
 
-- [ ] **T2.03 Build the Lever client** (P0) · Depends on T2.01
+- [x] **T2.03 Build the Lever client** (P0) · Depends on T2.01 · [#30](https://github.com/coderArchitech/job-assistant/pull/30)
   `GET api.lever.co/v0/postings/{site}?mode=json` with `skip` and `limit` paging; EU host support.
   _Note from T2.01:_ Implement `JobSource` with key `lever:<site>`; the same rules as T2.02 apply.
   _Done when:_ fixture tests pass and a live fetch of one public board works.
@@ -212,7 +212,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 - [ ] **T2.09 Build the company watchlist** (P0) · Depends on T1.03
   CRUD screen for companies with ATS type and board slug, and a "check board" button that validates the slug.
-  _Note from T2.02:_ "Check board" calls `GreenhouseSource(slug, name, client).checkBoard()`, which returns `BoardCheck.Valid(jobCount)`, `NotFound` or `Failed(message)` and never throws. Lever and Ashby clients should offer the same call. `JobSource` clients are built per watchlist entry with `@HttpClientFor(NetworkGroup.JOB_SOURCES)`.
+  _Note from T2.02:_ "Check board" calls `GreenhouseSource(slug, name, client).checkBoard()`, which returns `BoardCheck.Valid(jobCount)`, `NotFound` or `Failed(message)` and never throws. `LeverSource` (T2.03) offers the same call, and the Ashby client should too. `JobSource` clients are built per watchlist entry with `@HttpClientFor(NetworkGroup.JOB_SOURCES)`.
   _Done when:_ a user adds a Greenhouse, a Lever and an Ashby company and each check passes.
 
 ### Normalization and deduplication

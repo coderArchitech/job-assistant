@@ -2,7 +2,10 @@ package com.coderarchitech.jobassistant.sources
 
 /** Result of asking an ATS whether a watchlist board exists (the "check board" button, PRD FR3). */
 sealed interface BoardCheck {
-    /** The board exists and lists [jobCount] open postings. */
+    /**
+     * The board exists and lists [jobCount] open postings. A source that pages (Lever) counts only its first
+     * page, so a large board can have more.
+     */
     data class Valid(
         val jobCount: Int,
     ) : BoardCheck
