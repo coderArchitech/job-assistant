@@ -6,6 +6,7 @@ import androidx.datastore.dataStoreFile
 import com.coderarchitech.jobassistant.core.data.repository.ApplicationRepository
 import com.coderarchitech.jobassistant.core.data.repository.JobRepository
 import com.coderarchitech.jobassistant.core.data.repository.RoomApplicationRepository
+import com.coderarchitech.jobassistant.core.data.repository.RoomCapSlots
 import com.coderarchitech.jobassistant.core.data.repository.RoomJobRepository
 import com.coderarchitech.jobassistant.core.data.repository.RoomKnownPostings
 import com.coderarchitech.jobassistant.core.data.repository.RoomSourceCursorStore
@@ -21,6 +22,7 @@ import com.coderarchitech.jobassistant.core.data.settings.SettingsRepository
 import com.coderarchitech.jobassistant.core.data.settings.createSettingsDataStore
 import com.coderarchitech.jobassistant.core.data.settings.proto.SettingsProto
 import com.coderarchitech.jobassistant.core.model.BudgetSource
+import com.coderarchitech.jobassistant.core.model.CapSlots
 import com.coderarchitech.jobassistant.core.model.IoDispatcher
 import com.coderarchitech.jobassistant.core.model.KnownPostings
 import com.coderarchitech.jobassistant.core.model.SourceCursorStore
@@ -35,6 +37,9 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import java.io.File
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneId
 import javax.inject.Singleton
 
 /** Binds the `:core:data` repository interfaces to their implementations. */
@@ -60,6 +65,9 @@ internal abstract class DataModule {
     abstract fun bindUsageLedger(impl: RoomUsageLedger): UsageLedger
 
     @Binds
+    abstract fun bindCapSlots(impl: RoomCapSlots): CapSlots
+
+    @Binds
     abstract fun bindSourceCursorStore(impl: RoomSourceCursorStore): SourceCursorStore
 
     @Binds
@@ -69,6 +77,21 @@ internal abstract class DataModule {
     abstract fun bindBudgetSource(impl: SettingsBudgetSource): BudgetSource
 
     companion object {
+        /**
+         * The clock for "today" in the daily caps. It reads the device's time zone on every call, so days end
+         * at local midnight even after the user changes time zone while the app is running.
+         */
+        @Provides
+        @Singleton
+        fun provideClock(): Clock =
+            object : Clock() {
+                override fun getZone(): ZoneId = ZoneId.systemDefault()
+
+                override fun withZone(zone: ZoneId): Clock = system(zone)
+
+                override fun instant(): Instant = Instant.now()
+            }
+
         /** One DataStore per file per process, so it is a singleton. */
         @Provides
         @Singleton

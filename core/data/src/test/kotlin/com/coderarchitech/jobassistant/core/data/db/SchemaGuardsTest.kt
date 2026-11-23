@@ -63,6 +63,7 @@ class SchemaGuardsTest : DatabaseTest() {
                 "run",
                 "usage_record",
                 "daily_report",
+                "cap_usage",
             ),
             tables,
         )

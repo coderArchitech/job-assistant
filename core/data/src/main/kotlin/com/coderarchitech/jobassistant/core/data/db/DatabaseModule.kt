@@ -66,4 +66,7 @@ internal object DatabaseModule {
 
     @Provides
     fun provideDailyReportDao(db: AgentDatabase) = db.dailyReportDao()
+
+    @Provides
+    fun provideCapUsageDao(db: AgentDatabase) = db.capUsageDao()
 }
