@@ -6,8 +6,6 @@ import com.coderarchitech.jobassistant.core.model.SourceCursor
 import com.coderarchitech.jobassistant.core.network.NetworkJson
 import com.coderarchitech.jobassistant.core.network.await
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
@@ -15,7 +13,6 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
 import java.io.IOException
 import java.time.Instant
 
@@ -124,10 +121,8 @@ class LeverSource(
         client.newCall(Request.Builder().url(pageUrl(skip)).build()).await().use { response ->
             if (response.code == HTTP_NOT_FOUND) throw SiteNotFoundException(site)
             if (!response.isSuccessful) throw IOException("Lever site $site answered HTTP ${response.code}")
-            readBody(response)
+            response.readText()
         }
-
-    private suspend fun readBody(response: Response): String = withContext(Dispatchers.IO) { response.body.string() }
 
     /** Throws if the reply is not a list of postings. */
     private fun parsePage(body: String): List<PostingDto> =
@@ -152,7 +147,7 @@ class LeverSource(
             applyUrl = applyUrl.clean(),
             compensation = salaryText(),
             atsType = AtsType.LEVER,
-            workplaceType = workplaceType.clean()?.lowercase()?.takeIf { it != UNSPECIFIED },
+            workplaceType = workplaceType.normalizedWorkplace(),
         )
     }
 
@@ -233,12 +228,9 @@ class LeverSource(
         const val PAGE_SIZE = 100
         const val MAX_PAGES = 100
         const val HTTP_NOT_FOUND = 404
-        const val UNSPECIFIED = "unspecified"
         val SITE = Regex("[A-Za-z0-9_-]{1,100}")
     }
 }
-
-private fun String?.clean(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
 
 /** 85000.0 shows as 85000; a missing bound shows as nothing. */
 private fun Double?.show(): String =

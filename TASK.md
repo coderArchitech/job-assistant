@@ -190,7 +190,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Note from T2.01:_ Implement `JobSource` with key `lever:<site>`; the same rules as T2.02 apply.
   _Done when:_ fixture tests pass and a live fetch of one public board works.
 
-- [ ] **T2.04 Build the Ashby client** (P0) · Depends on T2.01
+- [x] **T2.04 Build the Ashby client** (P0) · Depends on T2.01 · [#31](https://github.com/coderArchitech/job-assistant/pull/31)
   Confirm the posting API endpoint first; include compensation.
   _Done when:_ fixture tests pass and a live fetch of one public board works.
 
@@ -212,7 +212,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 - [ ] **T2.09 Build the company watchlist** (P0) · Depends on T1.03
   CRUD screen for companies with ATS type and board slug, and a "check board" button that validates the slug.
-  _Note from T2.02:_ "Check board" calls `GreenhouseSource(slug, name, client).checkBoard()`, which returns `BoardCheck.Valid(jobCount)`, `NotFound` or `Failed(message)` and never throws. `LeverSource` (T2.03) offers the same call, and the Ashby client should too. `JobSource` clients are built per watchlist entry with `@HttpClientFor(NetworkGroup.JOB_SOURCES)`.
+  _Note from T2.02:_ "Check board" calls `GreenhouseSource(slug, name, client).checkBoard()`, which returns `BoardCheck.Valid(jobCount)`, `NotFound` or `Failed(message)` and never throws. `LeverSource` (T2.03) and `AshbySource` (T2.04) offer the same call. `JobSource` clients are built per watchlist entry with `@HttpClientFor(NetworkGroup.JOB_SOURCES)`.
   _Done when:_ a user adds a Greenhouse, a Lever and an Ashby company and each check passes.
 
 ### Normalization and deduplication

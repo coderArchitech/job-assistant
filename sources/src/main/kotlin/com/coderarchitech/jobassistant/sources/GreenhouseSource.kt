@@ -6,8 +6,6 @@ import com.coderarchitech.jobassistant.core.model.SourceCursor
 import com.coderarchitech.jobassistant.core.network.NetworkJson
 import com.coderarchitech.jobassistant.core.network.await
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
@@ -16,7 +14,6 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
 import java.io.IOException
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -71,7 +68,7 @@ class GreenhouseSource(
                 when {
                     response.code == HTTP_NOT_FOUND -> BoardCheck.NotFound
                     !response.isSuccessful -> BoardCheck.Failed("Greenhouse answered HTTP ${response.code}")
-                    else -> BoardCheck.Valid(parse(readBody(response)).size)
+                    else -> BoardCheck.Valid(parse(response.readText()).size)
                 }
             }
         } catch (e: CancellationException) {
@@ -85,11 +82,8 @@ class GreenhouseSource(
     private suspend fun download(): String =
         client.newCall(Request.Builder().url(jobsUrl).build()).await().use { response ->
             if (!response.isSuccessful) throw IOException("Greenhouse board $slug answered HTTP ${response.code}")
-            readBody(response)
+            response.readText()
         }
-
-    /** Reads the whole reply off the caller's thread; a board with full descriptions is several megabytes. */
-    private suspend fun readBody(response: Response): String = withContext(Dispatchers.IO) { response.body.string() }
 
     /**
      * Maps the reply, skipping postings that cannot become a [RawPosting]. Throws if the reply is unreadable,

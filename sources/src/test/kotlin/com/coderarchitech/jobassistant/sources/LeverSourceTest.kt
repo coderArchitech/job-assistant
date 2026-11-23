@@ -138,6 +138,14 @@ class LeverSourceTest {
         }
 
     @Test
+    fun onSiteIsSpelledTheSameWayAsAshbyDoes() =
+        runTest {
+            serve("""[{"id":"a","text":"A","hostedUrl":"https://x.test/a","workplaceType":"on-site"}]""")
+
+            assertEquals("on-site", source().fetch(null, preset).single().workplaceType)
+        }
+
+    @Test
     fun aPageOfPostingsWithoutIdsDoesNotEndThePaging() =
         runTest {
             serve("""[{"text":"No id","hostedUrl":"https://x.test/1"}]""", page(1..3))
