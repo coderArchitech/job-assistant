@@ -79,6 +79,9 @@ enum class BlockReason {
 
     /** The request contained a stored secret or the last OTP (T1.15). */
     SECRET_IN_PROMPT,
+
+    /** The vault could not be read, so the request could not be checked for secrets (T1.15). Nothing is sent. */
+    SECRET_CHECK_UNAVAILABLE,
 }
 
 /**

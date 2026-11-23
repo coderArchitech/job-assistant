@@ -44,7 +44,7 @@ The app is split into Gradle modules along the README's package layout, so the p
 | `:core:security` | Credential vault, key management, biometric gate, log and prompt redaction | `:core:model` |
 | `:core:network` | OkHttp clients per destination group, retry and backoff, JSON config | `:core:model` |
 | `:core:config` | Fetches and verifies signed adapter scripts and the model price table from the static config host | `:core:network`, `:core:security` |
-| `:ai` | `LlmProvider` and `Embedder` interfaces, Anthropic and OpenAI clients, prompt templates, output schemas, usage metering | `:core:network`, `:core:model` |
+| `:ai` | `LlmProvider` and `Embedder` interfaces, Anthropic and OpenAI clients, prompt templates, output schemas, usage metering, prompt guard | `:core:network`, `:core:security`, `:core:model` |
 | `:sources` | Job-board API clients, normalizer, deduplicator | `:core:network`, `:core:model` |
 | `:portals` | WebView runtime, JS bridge, `PortalAdapter` implementations, generic browser agent | `:ai`, `:core:security`, `:core:config` |
 | `:otp` | SMS User Consent listener and OTP extraction | `:core:model` |
@@ -304,6 +304,8 @@ Rules that follow from the spike:
 **Usage and budget.** Every response's token usage (uncached input, cache reads, cache writes and output) is written to `UsageRecord` and priced from the signed price table, which the user can edit. Before each call the guard adds a worst-case estimate (input tokens plus `maxOutputTokens` at list price) to month-to-date spend; if that exceeds the cap, the call is refused, the agent pauses and Home shows why.
 
 **Prompt guard.** A final check scans every outgoing request for the current vault secrets and the last OTP. A match blocks the call and logs a redacted security event. This enforces the PRD rule that passwords, OTPs and cookies never reach a prompt.
+
+Implementation (task T1.15): `GuardedLlmProvider` wraps a provider, outermost, and scans the system prompt, every context part and every input part with a `SecretScanner` (`:core:security`) before calling it. A match returns `LlmResult.Blocked(SECRET_IN_PROMPT)`; a vault that cannot be read returns `Blocked(SECRET_CHECK_UNAVAILABLE)`, so the guard fails closed and the next call tries again. Either way the wrapped provider is never called and one warning is logged through the redacting tree naming the task and whose secret it was (for example `vault:portal/12`), never the value. `RegistrySecretScanner` checks the `SecretRegistry`, which holds the vault's values and the last OTP; the first scan after a restart reads every vault slot once to fill it, and the vault keeps it current after that. Known limits: only exact text is matched (a value that is URL-encoded, split or re-cased is not), values under 4 characters are not checked, a short numeric OTP can block a request that contains the same digits by chance (it fails safe), and a slot that can never be decrypted cannot be checked.
 
 Estimated daily AI cost for one active user, at list prices for the default Claude models (assumptions: 4 runs a day, 60 jobs per run reach the LLM, 25 tailored jobs, 5 generic-agent applications of 30 steps each):
 

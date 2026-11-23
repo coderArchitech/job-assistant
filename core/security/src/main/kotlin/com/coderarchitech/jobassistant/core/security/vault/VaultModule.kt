@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.dataStoreFile
 import com.coderarchitech.jobassistant.core.model.IoDispatcher
+import com.coderarchitech.jobassistant.core.security.scan.RegistrySecretScanner
+import com.coderarchitech.jobassistant.core.security.scan.SecretScanner
 import com.coderarchitech.jobassistant.core.security.vault.proto.VaultProto
 import dagger.Binds
 import dagger.Module
@@ -22,6 +24,9 @@ import javax.inject.Singleton
 internal abstract class VaultModule {
     @Binds
     abstract fun bindVault(impl: TinkVault): Vault
+
+    @Binds
+    abstract fun bindSecretScanner(impl: RegistrySecretScanner): SecretScanner
 
     companion object {
         /** One DataStore per file per process, so it is a singleton. */

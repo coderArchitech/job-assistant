@@ -23,7 +23,7 @@ class SecretRegistry
         private val values = HashMap<String, CharArray>()
 
         /** Registered values long enough to redact, longest first; rebuilt on every change. */
-        @Volatile private var snapshot: List<CharArray> = emptyList()
+        @Volatile private var snapshot: List<Entry> = emptyList()
 
         /** Remembers [secret] under [key], replacing (and zeroing) any earlier value for that key. */
         fun register(
@@ -59,16 +59,28 @@ class SecretRegistry
             val out = StringBuilder(text.length)
             var i = 0
             while (i < text.length) {
-                val hit = secrets.firstOrNull { text.matchesAt(i, it) }
+                val hit = secrets.firstOrNull { text.matchesAt(i, it.chars) }
                 if (hit != null) {
                     out.append(replacement)
-                    i += hit.size
+                    i += hit.chars.size
                 } else {
                     out.append(text[i])
                     i++
                 }
             }
             return out.toString()
+        }
+
+        /**
+         * The key of the longest registered value that occurs in [text], or null when none does. Used by
+         * the prompt guard (T1.15), which blocks a request instead of editing it.
+         */
+        fun findKeyIn(text: String): String? {
+            for (entry in snapshot) {
+                val last = text.length - entry.chars.size
+                for (i in 0..last) if (text.matchesAt(i, entry.chars)) return entry.key
+            }
+            return null
         }
 
         private fun put(
@@ -93,8 +105,17 @@ class SecretRegistry
 
         /** Called with [lock] held. */
         private fun rebuildSnapshot() {
-            snapshot = values.values.filter { it.size >= MIN_LENGTH }.sortedByDescending { it.size }
+            snapshot =
+                values
+                    .map { (key, chars) -> Entry(key, chars) }
+                    .filter { it.chars.size >= MIN_LENGTH }
+                    .sortedByDescending { it.chars.size }
         }
+
+        private class Entry(
+            val key: String,
+            val chars: CharArray,
+        )
 
         /** Shared values. */
         companion object {
