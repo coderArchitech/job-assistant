@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Task T1.10. HTTPS only, and only the system trust store: no user-installed certificate authorities,
+    in any build type. Every client in :core:network also refuses plain HTTP, so this is the second lock.
+    NetworkSecurityConfigTest pins these rules.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

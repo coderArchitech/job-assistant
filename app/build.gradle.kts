@@ -88,6 +88,7 @@ android {
 dependencies {
     implementation(projects.core.ui)
     implementation(projects.core.data)
+    implementation(projects.core.network)
     implementation(projects.work)
 
     implementation(projects.feature.onboarding)
