@@ -340,7 +340,7 @@ interface JobSource {
 
 | Source | Endpoint (no auth unless noted) | Incremental by | Notes |
 | --- | --- | --- | --- |
-| Greenhouse | `GET boards-api.greenhouse.io/v1/boards/{board}/jobs?content=true` | `updated_at`, unseen ids | One call per watchlist company |
+| Greenhouse | `GET boards-api.greenhouse.io/v1/boards/{board}/jobs?content=true` | `first_published`, unseen ids | One call per watchlist company; no key, no paging; confirmed against the docs and a live board (T2.02) |
 | Lever | `GET api.lever.co/v0/postings/{site}?mode=json&skip=&limit=` (EU: `api.eu.lever.co`) | `createdAt`, unseen ids | Apply POST needs the company's API key, so applying uses the hosted form in the WebView |
 | Ashby | `GET api.ashbyhq.com/posting-api/job-board/{board}?includeCompensation=true` | `publishedAt`, unseen ids | One call per watchlist company |
 | RemoteOK | `GET remoteok.com/api` | Posting date | First array element is a legal notice; terms require crediting and linking back |
@@ -349,7 +349,7 @@ interface JobSource {
 | Hacker News "Who is hiring" | Algolia HN API: `search_by_date?tags=story,author_whoishiring`, then `items/{id}` | Comment id | Free-text comments; strict regex pre-filter (role keyword and either remote or the user's location), at most 100 comments a month to the LLM for extraction (D10) |
 | Naukri, Instahyre, custom portals | `PortalAdapter.search(preset)` in the WebView | Unseen ids | Needs a live session; capped and paced like applying |
 
-Only the Lever endpoint was checked against its documentation for this draft; the others are to be confirmed before each client is built.
+The Lever and Greenhouse endpoints were checked against their documentation (Greenhouse also against a live board when its client was built); the others are to be confirmed before each client is built.
 
 **Source contract** (`:sources`, task T2.01). `JobSource.fetch(since, preset)` returns `RawPosting`s (as the source sent them, HTML included) and throws when the fetch fails, so a failed run is never mistaken for an empty one. A source skips entries that cannot become a `RawPosting` and uses its `key` as the job's `source`. `SourceSync` runs a source incrementally in two steps:
 
@@ -357,6 +357,8 @@ Only the Lever endpoint was checked against its documentation for this draft; th
 2. `commit(outcome)` stores the cursor (`lastSuccessAt` is when the run started; `lastSeenExternalId` is the newest posting listed). The caller commits only after the new postings are stored, so a crash between the two loses nothing: the next run asks again and the stored ones are dropped.
 
 A source that can filter by date uses the cursor; one that cannot returns everything and relies on the known-postings check. `SourceCursorStore` and `KnownPostings` are interfaces in `:core:model`, implemented over Room in `:core:data`.
+
+**Greenhouse client** (task T2.02). `GreenhouseSource(slug, companyName, client)` has the key `greenhouse:<slug>` (lower case) and fetches the whole board in one call, since Greenhouse has no paging or date filter; `SourceSync` drops what the app already holds. Each posting becomes a `RawPosting` with `atsType = GREENHOUSE`, the company from `company_name` (the watchlist name when it is missing), the posting date from `first_published` (else `updated_at`), and `content` with its one level of HTML-entity escaping undone. Postings without an id, title or URL are skipped, a bad date becomes no date, and a reply with no job list, a non-200 status or unreadable JSON throws `IOException`. `checkBoard()` backs the watchlist's "check board" button: `Valid(jobCount)` (counting what a fetch would return), `NotFound` for HTTP 404 or `Failed(message)`, never an exception. Calls go through `Call.await()` in `:core:network`, which does not block the caller's thread and cancels the call when the coroutine is cancelled.
 
 **Per-host limit.** The job-sources client (`NetworkGroup.JOB_SOURCES`) lets at most 2 requests to one host be in progress at a time (`HostLimitInterceptor`). A request keeps its place until its response body is closed, and retries and their waits count as part of it. A waiting request gives up when its call is cancelled or times out. A redirect to another host counts against the first host only.
 
