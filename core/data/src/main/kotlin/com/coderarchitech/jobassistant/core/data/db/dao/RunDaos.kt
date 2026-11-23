@@ -7,6 +7,7 @@ import androidx.room.Query
 import com.coderarchitech.jobassistant.core.data.db.entity.DailyReportEntity
 import com.coderarchitech.jobassistant.core.data.db.entity.RunEntity
 import com.coderarchitech.jobassistant.core.data.db.entity.UsageRecordEntity
+import com.coderarchitech.jobassistant.core.model.AiTask
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
 import java.time.LocalDate
@@ -37,6 +38,13 @@ interface UsageRecordDao {
     /** Total estimated cost in micro-US-dollars for calls recorded at or after [from]. */
     @Query("SELECT COALESCE(SUM(estimatedCostMicros), 0) FROM usage_record WHERE recordedAt >= :from")
     suspend fun sumCostMicrosSince(from: Instant): Long
+
+    /** Total estimated cost in micro-US-dollars for [task] calls recorded at or after [from]. */
+    @Query("SELECT COALESCE(SUM(estimatedCostMicros), 0) FROM usage_record WHERE recordedAt >= :from AND task = :task")
+    suspend fun sumCostMicrosSince(
+        from: Instant,
+        task: AiTask,
+    ): Long
 
     /** Emits the total estimated cost for one run whenever usage changes. */
     @Query("SELECT COALESCE(SUM(estimatedCostMicros), 0) FROM usage_record WHERE runId = :runId")

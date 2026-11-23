@@ -131,7 +131,7 @@ One Room database (`agent.db`, schema exported and versioned) holds all non-secr
 | `OutreachMessage` | jobId, channel, recipient, draft, status, gmailThreadId, sentAt, repliedAt, followUpDueAt |  |
 | `Run` | presetId, startedAt, endedAt, status, countsPerStage, errors | Source of the run log |
 | `SourceCursor` | sourceKey, lastSuccessAt, lastSeenExternalId | New; makes discovery incremental per source |
-| `UsageRecord` | runId, provider, model, task, inputTokens, outputTokens, cachedTokens, estimatedCost | One row per AI call |
+| `UsageRecord` | runId, provider, model, task, inputTokens, outputTokens, cachedTokens, cacheWriteTokens, estimatedCost | One row per AI call; `cachedTokens` counts cache reads |
 | `DailyReport` | date, countsByStatus, countsByPortal, replies, failures, cost | Written by `ReportWorker` from the same queries the Applications screen uses |
 
 Lists such as skills are stored as JSON columns through kotlinx.serialization type converters. Settings that are not records (thresholds, schedule, selected models) live in Proto DataStore; see **Settings** below.
@@ -166,7 +166,7 @@ Rules for reading and changing the file:
 - A corrupt file is replaced with the defaults. A read that keeps failing with an I/O error is retried three times (100, 200, 400 ms) and then fails the flow instead of inventing values, so the budget guard and caps can fail closed.
 - No secrets: the API key is in the vault; `settings.pb` holds only the provider name and model ids.
 
-**Room database** (`:core:data`, task T1.03). `AgentDatabase` (`agent.db`, version 1) has one table per entity above, named in snake case (`job`, `match_result`, `outreach_message` and so on). Each table has an entity class, `toEntity()` and `toModel()` mappers to the pure `:core:model` type, and a DAO under `core.data.db`. The schema for every version is exported to `core/data/schemas/` and committed; the Room Gradle plugin writes it. Rules the code follows:
+**Room database** (`:core:data`, task T1.03). `AgentDatabase` (`agent.db`, version 2) has one table per entity above, named in snake case (`job`, `match_result`, `outreach_message` and so on). Each table has an entity class, `toEntity()` and `toModel()` mappers to the pure `:core:model` type, and a DAO under `core.data.db`. The schema for every version is exported to `core/data/schemas/` and committed; the Room Gradle plugin writes it. Rules the code follows:
 
 - **No destructive migration.** The builder never calls `fallbackToDestructiveMigration`, so a missing migration fails loudly instead of wiping the user's history. Migrations live in `AgentMigrations.ALL`, which the builder and the tests share. `MigrationTest` (Robolectric, so it runs on every push) builds each earlier version from its exported schema with `MigrationTestHelper` and checks Room accepts the migrated result. `scripts/ci/check_migration_tests.py` fails CI if the newest exported schema differs from `AgentDatabase.VERSION`, if versions have gaps, or if a version `M` has no `migrateNToM` test.
 - **Column choices.**
@@ -302,6 +302,16 @@ Rules that follow from the spike:
 - **JSON.** One shared `NetworkJson` (also injectable as `Json`) ignores unknown fields and treats a null and a missing field alike.
 
 **Usage and budget.** Every response's token usage (uncached input, cache reads, cache writes and output) is written to `UsageRecord` and priced from the signed price table, which the user can edit. Before each call the guard adds a worst-case estimate (input tokens plus `maxOutputTokens` at list price) to month-to-date spend; if that exceeds the cap, the call is refused, the agent pauses and Home shows why.
+
+Implementation (task T1.14): `MeteredLlmProvider` wraps a provider, inside the prompt guard.
+
+- **Check.** Before a call it adds the call's worst case to this calendar month's spend (in the device's time zone) and to the worst cases of calls still in flight, and refuses with `Blocked(BUDGET_EXCEEDED)` if the total passes `Budget.monthlyCapMicros`. The worst case is the input estimate (one token per two characters of the system prompt, context, input and output schema, at the dearer of the input and cache-write rates) plus `maxOutputTokens` at the output rate. `BROWSER_STEP` calls must also fit `Budget.browserAgentDailyMicros` for today's browser-agent spend, which is 0 (off) until the user sets it. Counting calls in flight stops two calls started together from together passing the cap, and a cancelled call gives its share back.
+- **Fail closed.** If the budget, the spend or the model cannot be read (settings storage fails after repeated I/O errors, or the database does), the call is refused with `Blocked(BUDGET_UNAVAILABLE)`. Nothing assumes a budget.
+- **Record.** After a call that reports tokens (`Success`, `Refused`, `Truncated` and `InvalidOutput`) it writes a `UsageRecord`, priced from the model that answered, with the run ID taken from a `UsageRunId` element in the coroutine context. A failed write is logged and never hides the result. A call that fails without a reply (network, rate limit, 5xx) writes nothing, because no token count exists.
+- **Prices.** `PriceTable` gives `ModelPrice` in micro-US-dollars per million tokens for input, output, cache reads and cache writes, and costs are rounded up so sums never undercount. A model the table does not list is priced at `FallbackPricing.PRICE`, set above any list price, so an unknown model is over-counted and never free. The signed price table from the config host (T3.09) will fill `PriceTable`.
+- **Pausing and Home.** The guard only refuses the call. Pausing the agent and showing the reason on Home belong to the pipeline runner and the Home screen, which act on a `Blocked` budget result.
+- **Where it lives.** `UsageLedger` and `BudgetSource` are in `:core:model` and implemented over Room and the settings in `:core:data`; the decorator is in `:ai`.
+- **Schema version 2** adds `usage_record.cacheWriteTokens` (default 0), with `migrate1To2` in `MigrationTest`.
 
 **Prompt guard.** A final check scans every outgoing request for the current vault secrets and the last OTP. A match blocks the call and logs a redacted security event. This enforces the PRD rule that passwords, OTPs and cookies never reach a prompt.
 

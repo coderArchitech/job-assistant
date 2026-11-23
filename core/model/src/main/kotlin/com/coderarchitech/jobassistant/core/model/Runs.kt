@@ -57,12 +57,17 @@ data class UsageRecord(
     val task: AiTask,
     val inputTokens: Long,
     val outputTokens: Long,
+    /** Input tokens read from the provider's prompt cache. */
     val cachedTokens: Long,
     val estimatedCostMicros: Long,
     val recordedAt: Instant,
+    /** Input tokens written to the prompt cache, which Anthropic bills above the base rate. Zero for OpenAI. */
+    val cacheWriteTokens: Long = 0,
 ) {
     init {
-        require(inputTokens >= 0 && outputTokens >= 0 && cachedTokens >= 0) { "Token counts cannot be negative" }
+        require(inputTokens >= 0 && outputTokens >= 0 && cachedTokens >= 0 && cacheWriteTokens >= 0) {
+            "Token counts cannot be negative"
+        }
         require(estimatedCostMicros >= 0) { "Cost cannot be negative" }
     }
 }

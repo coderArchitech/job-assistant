@@ -93,6 +93,6 @@ abstract class AgentDatabase : RoomDatabase() {
         const val NAME = "agent.db"
 
         /** The current schema version. */
-        const val VERSION = 1
+        const val VERSION = 2
     }
 }
