@@ -31,7 +31,7 @@ class RedactingTree(
         sink(priority, tag?.let(redactor::redact) ?: DEFAULT_TAG, redactor.redact(message))
     }
 
-    private companion object {
+    internal companion object {
         const val DEFAULT_TAG = "JobAssistant"
 
         /**
@@ -40,12 +40,34 @@ class RedactingTree(
          */
         const val MAX_LOGCAT_CHUNK = 1_300
 
+        /** A line break in the last part of a chunk is used as the split point. */
+        private const val NEWLINE_WINDOW = MAX_LOGCAT_CHUNK / 4
+
         fun writeToLogcat(
             priority: Int,
             tag: String,
             message: String,
         ) {
-            message.chunked(MAX_LOGCAT_CHUNK).forEach { Log.println(priority, tag, it) }
+            chunk(message).forEach { Log.println(priority, tag, it) }
+        }
+
+        /** Splits at a line break when one falls in the last quarter of a chunk, never inside a surrogate pair. */
+        internal fun chunk(message: String): List<String> {
+            val parts = mutableListOf<String>()
+            var start = 0
+            while (message.length - start > MAX_LOGCAT_CHUNK) {
+                var end = start + MAX_LOGCAT_CHUNK
+                val newline = message.lastIndexOf('\n', end - 1)
+                if (newline >= end - NEWLINE_WINDOW) {
+                    end = newline + 1
+                } else if (message[end - 1].isHighSurrogate()) {
+                    end--
+                }
+                parts += message.substring(start, end)
+                start = end
+            }
+            parts += message.substring(start)
+            return parts
         }
     }
 }

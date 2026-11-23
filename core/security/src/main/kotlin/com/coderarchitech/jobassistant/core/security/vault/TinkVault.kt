@@ -81,7 +81,13 @@ internal class TinkVault
                         val aead = valueAead ?: openExisting(vault)
                         if (aead == null) VaultRead.Unreadable else decrypt(aead, ciphertext, slot)
                     }
-                }.also { if (it is VaultRead.Found) registry.register(slot.registryKey(), it.secret) }
+                }.also {
+                    when (it) {
+                        is VaultRead.Found -> registry.register(slot.registryKey(), it.secret)
+                        VaultRead.Missing -> registry.unregister(slot.registryKey())
+                        VaultRead.Unreadable -> Unit // the value may still be valid; keep redacting it
+                    }
+                }
             }
 
         override suspend fun delete(slot: VaultSlot) =

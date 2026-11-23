@@ -95,6 +95,54 @@ class RedactionTest {
     }
 
     @Test
+    fun valuesPrintedByToStringAreRedacted() {
+        val cases =
+            mapOf(
+                "LoginRequest(user=someone, password=fake1)" to "LoginRequest(user=someone, password=[REDACTED])",
+                "{token=fake2, page=1}" to "{token=[REDACTED], page=1}",
+                "[otp=482139]" to "[otp=[REDACTED]]",
+            )
+        for ((input, expected) in cases) {
+            assertEquals(input, expected, redactor.redact(input))
+        }
+    }
+
+    @Test
+    fun usageCountsAndWordsContainingOtpAreNotSecrets() {
+        val text = """{"maxTokens":4096,"tokens_used":12,"footprint":"x","hotpath":1} maxTokens=4096"""
+        assertEquals(text, redactor.redact(text))
+        assertEquals("""{"userOtp":"[REDACTED]"}""", redactor.redact("""{"userOtp":"482139"}"""))
+    }
+
+    @Test
+    fun longTextWithoutSecretsIsRedactedInLinearTime() {
+        val blob = "a".repeat(200_000) + "token"
+
+        val start = System.nanoTime()
+        redactor.redact(blob)
+
+        assertTrue("took ${(System.nanoTime() - start) / 1_000_000} ms", System.nanoTime() - start < 5_000_000_000)
+    }
+
+    @Test
+    fun longMessagesSplitAtLineBreaks() {
+        val line = "x".repeat(99) + "\n"
+        val parts = RedactingTree.chunk(line.repeat(40))
+
+        assertTrue(parts.size > 1)
+        assertTrue("splits after a newline", parts.dropLast(1).all { it.endsWith("\n") })
+        assertEquals(line.repeat(40), parts.joinToString(""))
+    }
+
+    @Test
+    fun longMessagesAreNeverSplitInsideASurrogatePair() {
+        val emoji = "😀".repeat(1_000)
+        val emojiParts = RedactingTree.chunk(emoji)
+        assertEquals(emoji, emojiParts.joinToString(""))
+        assertTrue(emojiParts.all { it.isNotEmpty() && !it.last().isHighSurrogate() && !it.first().isLowSurrogate() })
+    }
+
+    @Test
     fun theTagIsRedactedToo() {
         Secret("fake-tag-secret-1").use { registry.register("t", it) }
         Timber.tag("fake-tag-secret-1").w("hello")

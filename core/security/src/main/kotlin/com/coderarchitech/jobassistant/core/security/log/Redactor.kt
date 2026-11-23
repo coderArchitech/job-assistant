@@ -35,12 +35,14 @@ class Redactor
             /**
              * A field or parameter name that holds a secret: any name containing one of these words,
              * so `accessToken`, `client_secret`, `session_token` and `otp_code` all count. Plain
-             * `key` or `code` alone do not, because they name ordinary values (cache keys, status
-             * codes) far more often.
+             * `key` or `code` do not, because they name ordinary values (cache keys, status codes),
+             * and neither do plural `tokens` (usage counts such as `maxTokens`) or `otp` inside a
+             * word (`footprint`). Names are capped at 40 characters each side, which also keeps
+             * matching linear on long unbroken text.
              */
             private const val SECRET_NAME =
-                "[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|otp|passcode" +
-                    "|verification[_-]?code|auth[_-]?code)[A-Za-z0-9_.-]*"
+                "[A-Za-z0-9_.-]{0,40}(?:password|passwd|pwd|secret|token(?!s)|api[_-]?key|passcode" +
+                    "|verification[_-]?code|auth[_-]?code|(?<![A-Za-z])otp|(?-i:Otp))[A-Za-z0-9_.-]{0,40}"
 
             /** A JSON value: a string with escapes, or anything unquoted up to the next delimiter. */
             private const val JSON_VALUE = "(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^,}\\]\\s]+)"
@@ -62,7 +64,7 @@ class Redactor
                     // JSON fields with secret names, quoted or not: "password":"...", "otp": 482139.
                     Regex("(?i)(\"$SECRET_NAME\"\\s*:\\s*)$JSON_VALUE") to "$1\"$REDACTED\"",
                     // Query or form parameters with secret names, also at the start of the text.
-                    Regex("(?i)((?:^|[?&;\\s])$SECRET_NAME=)[^&\\s]+") to "$1$REDACTED",
+                    Regex("(?i)((?:^|[?&;,(\\[{\\s])$SECRET_NAME=)[^&,)}\\]\\s]+") to "$1$REDACTED",
                 )
         }
     }

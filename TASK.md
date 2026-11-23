@@ -113,7 +113,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Note from T1.07:_ **Blocks wiring the vault into the app:** no PR may add `:core:security` to `:app` or a feature module before this lands, because Auto Backup would include `vault.pb` today.
   _Done when:_ a `bmgr` backup and restore on both API levels contains no vault, cookies or proofs.
 
-- [ ] **T1.09 Add log redaction** (P0) · Depends on T0.02
+- [x] **T1.09 Add log redaction** (P0) · Depends on T0.02 · [#24](https://github.com/coderArchitech/job-assistant/pull/24)
   A logging tree that strips vault values, API keys, `Authorization`, `x-api-key` and `Cookie` headers. No request bodies logged in release.
   _Note from T1.06:_ Log, redacted, when `settings.pb` is reset after corruption or a stored settings value falls back to its default (T1.06).
   _Done when:_ a test logs a known secret and finds it redacted in the output.
