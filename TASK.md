@@ -370,13 +370,14 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 ### Applying
 
-- [ ] **T3.20 Implement daily caps** (P0) · Depends on T1.03
+- [x] **T3.20 Implement daily caps** (P0) · Depends on T1.03 · [#28](https://github.com/coderArchitech/job-assistant/pull/28)
   Transactional cap slots per portal (default 10) and overall (default 25), reset at local midnight.
   _Done when:_ a test cannot take an eleventh slot on one portal in a day.
 
 - [ ] **T3.21 Build the apply session** (P0) · Depends on T3.13, T3.15, T3.16, T3.18, T3.20
   The apply flow from the design: take a cap slot, ensure a session, classify the page, fill, check for CAPTCHAs, stop before submit by default (or write `SUBMITTING`, click and confirm in auto-submit mode, which a portal allows only after 20 manual submissions, per D11), save a proof screenshot, write `SUBMITTED`. A `SUBMITTING` record left by a crash goes to "Check manually" and is never retried.
   _Note from T1.05:_ Settle a live attempt with `ApplicationRepository.markSubmitted`, `markFailed` or `markCheckManually`, passing the attempt ID. Change the application and its job in one `TransactionRunner.run { … }`, calling `requireMoved()` on each result. Call `recoverInterruptedSubmissions()` once at process start, before any session can begin. A failed application is final, so retrying a failed apply needs a new decision.
+  _Note from T3.20:_ Take the slot with `CapSlots.take(portal.id, portal.dailyCap, settings.caps.overallDailyApplies)` and start no session on `Denied`. If the session ends before it reached the portal (for example the stored login was missing), call `release(slot)` once; after the portal was contacted, keep the slot used.
   _Done when:_ killing the app mid-submit never produces a second submission in 20 trials.
 
 - [ ] **T3.22 Build the apply foreground service** (P0) · Depends on T3.21, D04

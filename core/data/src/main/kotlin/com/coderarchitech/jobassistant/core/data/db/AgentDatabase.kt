@@ -4,6 +4,7 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.coderarchitech.jobassistant.core.data.db.dao.ApplicationDao
+import com.coderarchitech.jobassistant.core.data.db.dao.CapUsageDao
 import com.coderarchitech.jobassistant.core.data.db.dao.CompanyWatchlistDao
 import com.coderarchitech.jobassistant.core.data.db.dao.DailyReportDao
 import com.coderarchitech.jobassistant.core.data.db.dao.DecisionDao
@@ -18,6 +19,7 @@ import com.coderarchitech.jobassistant.core.data.db.dao.SearchPresetDao
 import com.coderarchitech.jobassistant.core.data.db.dao.SourceCursorDao
 import com.coderarchitech.jobassistant.core.data.db.dao.UsageRecordDao
 import com.coderarchitech.jobassistant.core.data.db.entity.ApplicationEntity
+import com.coderarchitech.jobassistant.core.data.db.entity.CapUsageEntity
 import com.coderarchitech.jobassistant.core.data.db.entity.CompanyWatchlistEntity
 import com.coderarchitech.jobassistant.core.data.db.entity.DailyReportEntity
 import com.coderarchitech.jobassistant.core.data.db.entity.DecisionEntity
@@ -53,6 +55,7 @@ import com.coderarchitech.jobassistant.core.data.db.entity.UsageRecordEntity
         RunEntity::class,
         UsageRecordEntity::class,
         DailyReportEntity::class,
+        CapUsageEntity::class,
     ],
     version = AgentDatabase.VERSION,
     exportSchema = true,
@@ -88,11 +91,13 @@ abstract class AgentDatabase : RoomDatabase() {
 
     abstract fun dailyReportDao(): DailyReportDao
 
+    abstract fun capUsageDao(): CapUsageDao
+
     companion object {
         /** The database file name under `databases/`. */
         const val NAME = "agent.db"
 
         /** The current schema version. */
-        const val VERSION = 2
+        const val VERSION = 3
     }
 }

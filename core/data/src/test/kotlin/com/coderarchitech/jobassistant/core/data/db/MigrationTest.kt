@@ -52,6 +52,32 @@ class MigrationTest {
         db.close()
     }
 
+    /** Version 3 adds the daily cap counts; existing tables and rows are untouched. */
+    @Test
+    fun migrate2To3() {
+        helper.createDatabase(DB_NAME, 2).apply {
+            execSQL(
+                "INSERT INTO usage_record (id, runId, provider, model, task, inputTokens, outputTokens, " +
+                    "cachedTokens, estimatedCostMicros, recordedAt, cacheWriteTokens) " +
+                    "VALUES (7, NULL, 'ANTHROPIC', 'm', 'SCORE', 1500, 200, 1000, 4200, 1000, 300)",
+            )
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(DB_NAME, 3, true, *AgentMigrations.ALL.toTypedArray())
+
+        db.query("SELECT estimatedCostMicros, cacheWriteTokens FROM usage_record WHERE id = 7").use {
+            it.moveToFirst()
+            assertEquals(listOf(4200L, 300L), listOf(it.getLong(0), it.getLong(1)))
+        }
+        db.execSQL("INSERT INTO cap_usage (day, scope, used) VALUES ('2026-03-01', 'overall', 1)")
+        db.query("SELECT used FROM cap_usage").use {
+            it.moveToFirst()
+            assertEquals(1, it.getInt(0))
+        }
+        db.close()
+    }
+
     /** Version 1 has nothing to migrate from; this proves its exported schema can build a database. */
     @Test
     fun createsVersion1() {

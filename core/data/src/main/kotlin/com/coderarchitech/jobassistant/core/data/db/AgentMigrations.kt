@@ -20,6 +20,17 @@ internal object AgentMigrations {
             }
         }
 
+    /** Version 3 (T3.20): the per-day apply slot counts behind the daily caps. */
+    private val MIGRATION_2_3 =
+        object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `cap_usage` (`day` TEXT NOT NULL, `scope` TEXT NOT NULL, " +
+                        "`used` INTEGER NOT NULL, PRIMARY KEY(`day`, `scope`))",
+                )
+            }
+        }
+
     /** Every migration, oldest first. */
-    val ALL: List<Migration> = listOf(MIGRATION_1_2)
+    val ALL: List<Migration> = listOf(MIGRATION_1_2, MIGRATION_2_3)
 }

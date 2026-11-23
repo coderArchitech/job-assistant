@@ -132,6 +132,7 @@ One Room database (`agent.db`, schema exported and versioned) holds all non-secr
 | `Run` | presetId, startedAt, endedAt, status, countsPerStage, errors | Source of the run log |
 | `SourceCursor` | sourceKey, lastSuccessAt, lastSeenExternalId | New; makes discovery incremental per source |
 | `UsageRecord` | runId, provider, model, task, inputTokens, outputTokens, cachedTokens, cacheWriteTokens, estimatedCost | One row per AI call; `cachedTokens` counts cache reads |
+| `CapUsage` | day, scope (`overall` or `portal/<id>`), used | Slots taken per local day for the apply caps; not a `:core:model` type |
 | `DailyReport` | date, countsByStatus, countsByPortal, replies, failures, cost | Written by `ReportWorker` from the same queries the Applications screen uses |
 
 Lists such as skills are stored as JSON columns through kotlinx.serialization type converters. Settings that are not records (thresholds, schedule, selected models) live in Proto DataStore; see **Settings** below.
@@ -166,7 +167,7 @@ Rules for reading and changing the file:
 - A corrupt file is replaced with the defaults. A read that keeps failing with an I/O error is retried three times (100, 200, 400 ms) and then fails the flow instead of inventing values, so the budget guard and caps can fail closed.
 - No secrets: the API key is in the vault; `settings.pb` holds only the provider name and model ids.
 
-**Room database** (`:core:data`, task T1.03). `AgentDatabase` (`agent.db`, version 2) has one table per entity above, named in snake case (`job`, `match_result`, `outreach_message` and so on). Each table has an entity class, `toEntity()` and `toModel()` mappers to the pure `:core:model` type, and a DAO under `core.data.db`. The schema for every version is exported to `core/data/schemas/` and committed; the Room Gradle plugin writes it. Rules the code follows:
+**Room database** (`:core:data`, task T1.03). `AgentDatabase` (`agent.db`, version 3) has one table per entity above, named in snake case (`job`, `match_result`, `outreach_message` and so on). Each table has an entity class, `toEntity()` and `toModel()` mappers to the pure `:core:model` type, and a DAO under `core.data.db`. The schema for every version is exported to `core/data/schemas/` and committed; the Room Gradle plugin writes it. Rules the code follows:
 
 - **No destructive migration.** The builder never calls `fallbackToDestructiveMigration`, so a missing migration fails loudly instead of wiping the user's history. Migrations live in `AgentMigrations.ALL`, which the builder and the tests share. `MigrationTest` (Robolectric, so it runs on every push) builds each earlier version from its exported schema with `MigrationTestHelper` and checks Room accepts the migrated result. `scripts/ci/check_migration_tests.py` fails CI if the newest exported schema differs from `AgentDatabase.VERSION`, if versions have gaps, or if a version `M` has no `migrateNToM` test.
 - **Column choices.**
@@ -313,6 +314,13 @@ Implementation (task T1.14): `MeteredLlmProvider` wraps a provider, inside the p
 - **Where it lives.** `UsageLedger` and `BudgetSource` are in `:core:model` and implemented over Room and the settings in `:core:data`; the decorator is in `:ai`.
 - **Schema version 2** adds `usage_record.cacheWriteTokens` (default 0), with `migrate1To2` in `MigrationTest`.
 
+**Daily caps** (`:core:data`, task T3.20). `CapSlots` (an interface in `:core:model`) hands out apply slots, backed by the `cap_usage` table (schema version 3, `migrate2To3`).
+
+- `take(portalId, portalCap, overallCap)` takes one slot for the portal and one overall in a single transaction, each with a guarded `UPDATE ... WHERE used < cap`, so sessions racing for the last slot cannot both get it. It returns `Taken(slot)` or `Denied(PORTAL | OVERALL)`; a denied attempt changes no count. A cap of 0 turns applying off. The caps are arguments (`Portal.dailyCap` and `Caps.overallDailyApplies`), so a cap lowered during the day applies at once.
+- A day is the local calendar date, read from the device's current time zone, so the counts start again at local midnight with no job: a new day just uses new rows. Counts older than 7 days are trimmed on the next `take`.
+- `release(slot)` gives a slot back for a session that never reached the portal. An attempt that touched the site is not released: it counts against the day. Release each slot at most once.
+- `remaining(...)` gives the slots left today for the screens.
+
 **Prompt guard.** A final check scans every outgoing request for the current vault secrets and the last OTP. A match blocks the call and logs a redacted security event. This enforces the PRD rule that passwords, OTPs and cookies never reach a prompt.
 
 Implementation (task T1.15): `GuardedLlmProvider` wraps a provider, outermost, and scans the system prompt, every context part and every input part with a `SecretScanner` (`:core:security`) before calling it. A match returns `LlmResult.Blocked(SECRET_IN_PROMPT)`; a vault that cannot be read returns `Blocked(SECRET_CHECK_UNAVAILABLE)`, so the guard fails closed and the next call tries again. Either way the wrapped provider is never called and one warning is logged through the redacting tree naming the task and whose secret it was (for example `vault:portal/12`), never the value. `RegistrySecretScanner` checks the `SecretRegistry`, which holds the vault's values and the last OTP; the first scan after a restart reads every vault slot once to fill it, and the vault keeps it current after that. Known limits: only exact text is matched (a value that is URL-encoded, split or re-cased is not), values under 4 characters are not checked, a short numeric OTP can block a request that contains the same digits by chance (it fails safe), and a slot that can never be decrypted cannot be checked.
@@ -436,7 +444,7 @@ Bundles come from the static config host so selectors can be fixed without an ap
 
 **Apply flow** (built-in adapters)
 
-1. Take a cap slot: a transactional counter per portal per day; no slot, no session.
+1. Take a cap slot: a transactional counter per portal per day (see **Daily caps**); no slot, no session.
 2. Ensure a session: reuse cookies, or log in through the vault (see the next section).
 3. Open the job and classify the page: apply form, already applied, or a redirect to Workday or another unsupported site, which moves the job to "Apply manually" with answers ready to copy.
 4. Fill fields from the answers and drafts. Any unmatched required field sets `NeedsInput`, pauses the job and notifies.
