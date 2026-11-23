@@ -68,6 +68,17 @@ as_app() { adb shell "run-as $app_id $*" </dev/null; }
 
 app_has() { as_app "ls $1" >/dev/null 2>&1; }
 
+# True if the output of a device shell command matches a pattern. The output is captured first and then
+# searched. Do not write `dev ... | grep -q ...` here: with `pipefail`, `grep -q` exits at the first match,
+# the producer can still be writing, gets SIGPIPE, and the whole pipeline then reports failure even though
+# the pattern was found. That race made the transport selection and other checks fail at random on CI.
+dev_has() {
+  local pattern="$1" output
+  shift
+  output="$(dev "$@")" || return 1
+  grep -q -- "$pattern" <<<"$output"
+}
+
 # Copies a host file to a path in the app's data directory, byte for byte.
 # The bytes travel base64-encoded inside one `adb shell` command and are decoded on the device with
 # toybox base64 (Android 10+). Streaming stdin through `adb exec-in` into run-as failed on the CI
@@ -98,12 +109,12 @@ done
 api="$(dev getprop ro.build.version.sdk)"
 log "API level $api"
 
-dev pm path "$app_id" | grep -q '^package:' || fail "$app_id is not installed; run ./gradlew installDevDebug first"
+dev_has '^package:' pm path "$app_id" || fail "$app_id is not installed; run ./gradlew installDevDebug first"
 as_app "true" || fail "run-as $app_id failed; install a debuggable build (devDebug)"
 
 log "Enabling backup with the local transport"
 for _ in $(seq 1 60); do
-  dev bmgr enabled | grep -q 'currently' && break
+  dev_has 'currently' bmgr enabled && break
   sleep 1
 done
 dev bmgr enable true
@@ -126,11 +137,11 @@ transport="$(sed -n 's/^[[:space:]*]*\([^[:space:]]*LocalTransport\)[[:space:]]*
 [[ -n "$transport" ]] || fail "no local transport on this device"
 # Right after boot the backup manager can ignore a transport switch, so ask again until it sticks.
 for _ in $(seq 1 60); do
-  dev bmgr list transports | grep -q "^[[:space:]]*\*[[:space:]]*$transport" && break
+  dev_has "^[[:space:]]*\*[[:space:]]*$transport" bmgr list transports && break
   dev bmgr transport "$transport" >/dev/null || true
   sleep 1
 done
-dev bmgr list transports | grep -q "^[[:space:]]*\*[[:space:]]*$transport" || fail "could not select $transport"
+dev_has "^[[:space:]]*\*[[:space:]]*$transport" bmgr list transports || fail "could not select $transport"
 # Drop data from earlier runs, before this run's backup, so the transport holds exactly one
 # restore set for the app: the one this run writes.
 dev bmgr wipe "$transport" "$app_id" || true
@@ -178,7 +189,7 @@ echo "$backup_out"
 grep -q "Package $app_id with result: Success" <<<"$backup_out" || fail "backup of $app_id did not succeed (on API 31+, check that the transport reports encryption)"
 
 log "Clearing app data"
-dev pm clear "$app_id" | grep -q 'Success' || fail "pm clear $app_id failed"
+dev_has 'Success' pm clear "$app_id" || fail "pm clear $app_id failed"
 app_has "$keep_file" && fail "pm clear left $keep_file behind"
 
 log "Restoring"
