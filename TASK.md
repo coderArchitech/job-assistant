@@ -132,12 +132,14 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   Official `anthropic-java` SDK (D01). Messages API with structured outputs (`output_config.format`) from a hand-written JSON Schema, never the class-derived overload; `GET /v1/models` for the key check and model list; prompt caching on the stable prefix; `stop_reason` handling, including `refusal`; no sampling parameters sent; usage (including cached tokens) mapped to `UsageRecord`.
   _Note from T1.11:_ Extend `LlmProviderContract` (`:ai` tests) and serve each `Scenario` from MockWebServer. Map `input_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens` straight into `TokenUsage`. Check whether structured outputs accept value keywords such as `minimum` and `maxLength`; the design keeps those limits in the Kotlin type.
   _Note from T1.10:_ Inject `@HttpClientFor(NetworkGroup.AI) OkHttpClient`. It already retries 429, 529 and 5xx and returns the last response, so map a final 429 or 529 to `RateLimited(retryAfter)` from its `Retry-After` header, a 401 or 403 to `InvalidKey`, and an `IOException` (including `BlockedRequestException`) to `NetworkError`. Do not add a second retry loop.
+  _Note from T1.15:_ Wire the provider as `GuardedLlmProvider(…, secretScanner)`, outermost, in the Hilt module that provides it. Nothing constructs the guard yet, so until this is done requests are not scanned.
   _Done when:_ the contract suite passes against recorded fixtures, and one live smoke test passes with a real key.
 
 - [ ] **T1.13 Implement the OpenAI provider** (P0) · Depends on T1.01, T1.10, T1.11
   Thin client on OkHttp and kotlinx.serialization (D01). Structured Outputs with a strict JSON schema, `GET /v1/models` filtered by the remote allowlist, embeddings endpoint, and refusal and `finish_reason` handling.
   _Note from T1.11:_ Extend `LlmProviderContract` (`:ai` tests). OpenAI's `prompt_tokens` includes `cached_tokens`: set `TokenUsage.inputTokens` to the difference and `cacheReadInputTokens` to `cached_tokens`.
   _Note from T1.10:_ Inject `@HttpClientFor(NetworkGroup.AI) OkHttpClient` and the shared `Json`. Retries are already done by the client, so do not add a second loop; map the final status as in T1.12.
+  _Note from T1.15:_ Wire the provider as `GuardedLlmProvider(…, secretScanner)`, outermost, as in T1.12.
   _Done when:_ the contract suite passes against recorded fixtures, and one live smoke test passes with a real key.
 
 - [ ] **T1.14 Add usage metering and the budget guard** (P0) · Depends on T1.03, T1.11
@@ -145,9 +147,10 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Note from T1.06:_ Fail closed: if `SettingsRepository.settings` fails (it does after repeated I/O errors), pause AI calls rather than assume a budget.
   _Note from T1.11:_ `TokenUsage` splits input into uncached, cache-read and cache-write tokens (cache writes cost more than base input on Anthropic). `UsageRecord` in `:core:model` has only `cachedTokens`, so add a cache-write count before pricing. Return `LlmResult.Blocked(BUDGET_EXCEEDED)` for a refused call. `FakeLlmProvider` and `LlmProviderContract` sit in `:ai` tests; move them to a shared test-fixtures source set if the guard's tests live outside `:ai`.
   _Note from T1.03:_ `UsageRecordDao.sumCostMicrosSince(from)` gives month-to-date spend. The `usage_record` table has only `cachedTokens`; add the cache-write column with a schema version and migration test (T1.04) before pricing.
+  _Note from T1.15:_ `BlockReason` now also has `SECRET_CHECK_UNAVAILABLE`. Put the budget guard inside `GuardedLlmProvider`, so a request is checked for secrets before anything else sees it.
   _Done when:_ a test with a $1 cap refuses the call that would cross it.
 
-- [ ] **T1.15 Add the prompt guard** (P0) · Depends on T1.07, T1.11
+- [x] **T1.15 Add the prompt guard** (P0) · Depends on T1.07, T1.11 · [#25](https://github.com/coderArchitech/job-assistant/pull/25)
   Scan every outgoing AI request for current vault values and the last OTP; block the call and log a redacted security event on a match.
   _Note from T1.07:_ Read secrets with `Secret.useChars` where possible; `reveal()` needs `@RevealsSecret`. Use `Vault.slots()` to enumerate secrets to scan for.
   _Done when:_ a request containing a stored password is blocked in a test.
@@ -352,6 +355,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 - [ ] **T3.18 Read OTPs from SMS** (P0) · Depends on T3.17
   SMS User Consent API: start the listener before triggering the OTP, launch the consent intent, extract a 4–8 digit code, type it through the bridge and clear it from memory. Exported receiver with the Play services permission. Timeout ends the login as `Failed(OTP_TIMEOUT)`. A background notification ("Naukri needs an OTP") opens Agent at work.
+  _Note from T1.15:_ Register the last code with `SecretRegistry.register("otp", chars)` as soon as it is read, and unregister it when it is used or expires. The prompt guard and the log redaction both read it from there; nothing registers an OTP yet.
   _Done when:_ an OTP login completes without typing (BR6) on a real device.
 
 - [ ] **T3.19 Build the portal manager** (P0) · Depends on T3.17, T1.07

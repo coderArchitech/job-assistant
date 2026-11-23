@@ -8,6 +8,9 @@ dependencies {
     api(projects.core.model)
     api(libs.kotlinx.serialization.json)
     implementation(projects.core.network)
+    // The prompt guard scans requests for vault values and the last OTP (T1.15).
+    implementation(projects.core.security)
+    implementation(libs.timber)
 
     testImplementation(libs.kotlinx.coroutines.test)
 }
