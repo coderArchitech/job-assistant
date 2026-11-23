@@ -29,6 +29,7 @@ protobuf-plugin = "0.10.0"
 robolectric = "4.18"
 room = "2.8.4"
 tink = "1.24.0"
+timber = "5.0.1"
 # Android runtime jar Robolectric 4.18 uses for SDK 36; fetched by Gradle so tests run offline.
 robolectric-android-all = "16-robolectric-13921718-2-i7"
 
@@ -78,6 +79,7 @@ protobuf-protoc = { module = "com.google.protobuf:protoc", version.ref = "protob
 junit4 = { module = "junit:junit", version.ref = "junit4" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 tink-android = { module = "com.google.crypto.tink:tink-android", version.ref = "tink" }
+timber = { module = "com.jakewharton.timber:timber", version.ref = "timber" }
 robolectric-android-all = { module = "org.robolectric:android-all-instrumented", version.ref = "robolectric-android-all" }
 
 # Gradle plugins used by build-logic

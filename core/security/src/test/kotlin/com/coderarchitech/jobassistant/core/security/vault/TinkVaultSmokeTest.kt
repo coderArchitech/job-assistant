@@ -1,5 +1,6 @@
 package com.coderarchitech.jobassistant.core.security.vault
 
+import com.coderarchitech.jobassistant.core.security.log.SecretRegistry
 import com.google.protobuf.ByteString
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -17,7 +18,7 @@ class TinkVaultSmokeTest {
     private val dispatcher = StandardTestDispatcher()
     private val scope = TestScope(dispatcher)
     private val dataStore = createVaultDataStore(scope.backgroundScope) { tmp.root.resolve("vault.pb") }
-    private val vault = TinkVault(dataStore, FakeKek(), dispatcher)
+    private val vault = TinkVault(dataStore, FakeKek(), dispatcher, SecretRegistry())
 
     @Test
     fun roundTripAndMovedValueIsUnreadable() =

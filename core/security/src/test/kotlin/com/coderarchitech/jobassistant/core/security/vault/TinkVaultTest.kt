@@ -1,6 +1,7 @@
 package com.coderarchitech.jobassistant.core.security.vault
 
 import com.coderarchitech.jobassistant.core.model.AiProvider
+import com.coderarchitech.jobassistant.core.security.log.SecretRegistry
 import com.coderarchitech.jobassistant.core.security.vault.proto.VaultProto
 import com.google.protobuf.ByteString
 import kotlinx.coroutines.CoroutineScope
@@ -48,7 +49,7 @@ class TinkVaultTest {
         private val dispatcher = StandardTestDispatcher(testScope.testScheduler)
         private val scope = CoroutineScope(dispatcher + Job())
         val dataStore = createVaultDataStore(scope) { file }
-        val vault: Vault = TinkVault(dataStore, kek, dispatcher)
+        val vault: Vault = TinkVault(dataStore, kek, dispatcher, SecretRegistry())
 
         suspend fun stored(): VaultProto = dataStore.data.first()
 

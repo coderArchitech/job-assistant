@@ -529,6 +529,13 @@ The app's most valuable assets are portal passwords, session cookies and a paid 
 | Network interception | API key, credentials | HTTPS only (`cleartextTrafficPermitted=false`), system trust store, no user-installed CAs in release |
 | Lost or shared phone | Everything | Optional biometric or device-PIN lock; "Delete all data" |
 
+**Log redaction** (`:core:security`, task T1.09). `RedactingTree` is the only Timber tree the app plants, and it is planted in `JobAssistantApp`: debug builds keep every priority, release builds keep INFO and above. Every line, its tag and any stack trace passes through `Redactor` before it is written, and the result replaces each secret with `[REDACTED]`. Two layers:
+
+- **Live registry.** `SecretRegistry` holds zeroable copies of the secrets the process knows. The vault registers each value it stores or returns under `vault:<slot>` and unregisters it on delete, wipe or a read that finds the slot empty; the OTP flow registers the last code under its own key. Matching is exact and longest value first. Values under 4 characters are skipped, so a short value cannot blank out ordinary words.
+- **Patterns.** AI provider keys (`sk-…`), `Authorization`, `x-api-key`, `Cookie` and `Set-Cookie` headers, `Bearer` and Google (`ya29.`) tokens, and the values of JSON fields, query parameters and `name=value` pairs whose name contains `password`, `passwd`, `pwd`, `secret`, `token`, `api_key`, `passcode`, `otp` or a verification or auth code. Plain `key` and `code`, plural `tokens` (usage counts) and words that merely contain `otp` are left alone.
+- **Known limits.** A secret that was never registered and has an unusual name is not caught; a registered secret is not caught in a transformed form (URL-encoded, Base64 or JSON-escaped); and only code that logs through Timber is covered, so libraries that write to Logcat directly are not. Request and response bodies are not logged at all.
+- **Settings.** `settings.pb` falling back to defaults (corruption, or an invalid stored value) is logged by field name, never by value.
+
 **Backups** (task T1.08, decision D03)
 
 - Auto Backup is on and backs up non-secret data: the Room database, `settings.pb` and other app files, so a new phone keeps job history and preferences.

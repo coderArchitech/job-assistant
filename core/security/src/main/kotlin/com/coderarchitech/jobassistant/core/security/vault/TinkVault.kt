@@ -2,6 +2,7 @@ package com.coderarchitech.jobassistant.core.security.vault
 
 import androidx.datastore.core.DataStore
 import com.coderarchitech.jobassistant.core.model.IoDispatcher
+import com.coderarchitech.jobassistant.core.security.log.SecretRegistry
 import com.coderarchitech.jobassistant.core.security.vault.proto.VaultProto
 import com.google.crypto.tink.Aead
 import com.google.crypto.tink.KeysetHandle
@@ -28,6 +29,9 @@ import javax.inject.Singleton
  * A `vault.pb` written by a newer app version ([VaultProto.getSchemaVersion] above
  * [VAULT_SCHEMA_VERSION]) is never read or changed, only wiped. JVM tests build it directly with
  * a test [DataStore], a fake [KeyEncryptionKey] and a test dispatcher.
+ *
+ * Every value it stores or returns is added to [registry], and removed on delete or wipe, so the
+ * log redactor can strip it by exact match (T1.09).
  */
 @Singleton
 internal class TinkVault
@@ -36,6 +40,7 @@ internal class TinkVault
         private val dataStore: DataStore<VaultProto>,
         private val kek: KeyEncryptionKey,
         @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+        private val registry: SecretRegistry,
     ) : Vault {
         private val mutex = Mutex()
 
@@ -60,6 +65,8 @@ internal class TinkVault
                 dataStore.updateData { current ->
                     current.toBuilder().putEntries(slot.name, ByteString.copyFrom(ciphertext)).build()
                 }
+                if (result is VaultPut.StoredAfterReset) result.lost.forEach { registry.unregister(it.registryKey()) }
+                registry.register(slot.registryKey(), secret)
                 result
             }
 
@@ -74,6 +81,12 @@ internal class TinkVault
                         val aead = valueAead ?: openExisting(vault)
                         if (aead == null) VaultRead.Unreadable else decrypt(aead, ciphertext, slot)
                     }
+                }.also {
+                    when (it) {
+                        is VaultRead.Found -> registry.register(slot.registryKey(), it.secret)
+                        VaultRead.Missing -> registry.unregister(slot.registryKey())
+                        VaultRead.Unreadable -> Unit // the value may still be valid; keep redacting it
+                    }
                 }
             }
 
@@ -87,7 +100,7 @@ internal class TinkVault
                         current
                     }
                 }
-                Unit
+                registry.unregister(slot.registryKey())
             }
 
         override suspend fun slots(): Set<VaultSlot> =
@@ -102,6 +115,7 @@ internal class TinkVault
             locked {
                 valueAead = null
                 dataStore.updateData { VaultSerializer.defaultValue }
+                registry.unregisterAll(REGISTRY_PREFIX)
                 keystore("Cannot delete the vault key") { kek.delete() }
             }
 
@@ -259,3 +273,9 @@ private fun Exception.toVaultException(message: String) =
 
 /** Associated data that binds a ciphertext to its slot, so it fails to decrypt anywhere else. */
 internal fun VaultSlot.associatedData(): ByteArray = ("jobassistant/vault/v1|slot|$name").toByteArray(Charsets.UTF_8)
+
+/** Prefix of the vault's keys in the log redaction registry; other owners (the OTP flow) use their own. */
+internal const val REGISTRY_PREFIX = "vault:"
+
+/** This slot's key in the log redaction registry. */
+internal fun VaultSlot.registryKey(): String = REGISTRY_PREFIX + name

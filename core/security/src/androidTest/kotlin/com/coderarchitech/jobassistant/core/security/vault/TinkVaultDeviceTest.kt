@@ -4,6 +4,7 @@ import android.security.keystore.KeyPermanentlyInvalidatedException
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.coderarchitech.jobassistant.core.model.AiProvider
+import com.coderarchitech.jobassistant.core.security.log.SecretRegistry
 import com.coderarchitech.jobassistant.core.security.vault.proto.VaultProto
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,7 +43,7 @@ class TinkVaultDeviceTest {
     ) {
         private val scope = CoroutineScope(Dispatchers.IO + Job())
         val dataStore = createVaultDataStore(scope) { file }
-        val vault: Vault = TinkVault(dataStore, kek, Dispatchers.IO)
+        val vault: Vault = TinkVault(dataStore, kek, Dispatchers.IO, SecretRegistry())
 
         suspend fun stored(): VaultProto = dataStore.data.first()
 

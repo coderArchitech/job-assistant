@@ -89,6 +89,8 @@ dependencies {
     implementation(projects.core.ui)
     implementation(projects.core.data)
     implementation(projects.core.network)
+    // Redacting log tree; allowed since T1.08 keeps vault.pb out of backups.
+    implementation(projects.core.security)
     implementation(projects.work)
 
     implementation(projects.feature.onboarding)
