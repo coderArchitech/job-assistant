@@ -351,6 +351,15 @@ interface JobSource {
 
 Only the Lever endpoint was checked against its documentation for this draft; the others are to be confirmed before each client is built.
 
+**Source contract** (`:sources`, task T2.01). `JobSource.fetch(since, preset)` returns `RawPosting`s (as the source sent them, HTML included) and throws when the fetch fails, so a failed run is never mistaken for an empty one. A source skips entries that cannot become a `RawPosting` and uses its `key` as the job's `source`. `SourceSync` runs a source incrementally in two steps:
+
+1. `fetchNew(source, preset)` reads the source's cursor, calls `fetch`, drops duplicate ids and the postings already stored as jobs from that source (`KnownPostings`, a lookup on the job table's unique (source, externalId)), and returns only the new ones with the cursor to store afterwards. A failure of the source or of the lookups comes back as `FetchOutcome.Failed` and leaves the cursor alone, so one bad source never stops the others.
+2. `commit(outcome)` stores the cursor (`lastSuccessAt` is when the run started; `lastSeenExternalId` is the newest posting listed). The caller commits only after the new postings are stored, so a crash between the two loses nothing: the next run asks again and the stored ones are dropped.
+
+A source that can filter by date uses the cursor; one that cannot returns everything and relies on the known-postings check. `SourceCursorStore` and `KnownPostings` are interfaces in `:core:model`, implemented over Room in `:core:data`.
+
+**Per-host limit.** The job-sources client (`NetworkGroup.JOB_SOURCES`) lets at most 2 requests to one host be in progress at a time (`HostLimitInterceptor`). A request keeps its place until its response body is closed, and retries and their waits count as part of it. A waiting request gives up when its call is cancelled or times out. A redirect to another host counts against the first host only.
+
 **Normalization**
 
 - HTML descriptions are converted to plain text (Jsoup) and capped at 8,000 characters for prompts.

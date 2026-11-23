@@ -176,16 +176,18 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 ### Job sources
 
-- [ ] **T2.01 Define the source contract and cursors** (P0) · Depends on T1.03, T1.10
+- [x] **T2.01 Define the source contract and cursors** (P0) · Depends on T1.03, T1.10 · [#27](https://github.com/coderArchitech/job-assistant/pull/27)
   `JobSource` interface, `RawPosting` type and `SourceCursor` storage; per-host limit of 2 concurrent requests.
   _Done when:_ a fake source runs incrementally across two runs without reprocessing jobs.
 
 - [ ] **T2.02 Build the Greenhouse client** (P0) · Depends on T2.01
   Confirm the job board API endpoint against current docs first, then fetch per watchlist company with content.
+  _Note from T2.01:_ Implement `JobSource` with key `greenhouse:<board>`, use `@HttpClientFor(NetworkGroup.JOB_SOURCES)` (it limits each host to 2 requests at a time), skip entries that fail `RawPosting` validation, and throw `IOException` on a failed fetch rather than return an empty list. Set `RawPosting.atsType`.
   _Done when:_ fixture tests pass and a live fetch of one public board works.
 
 - [ ] **T2.03 Build the Lever client** (P0) · Depends on T2.01
   `GET api.lever.co/v0/postings/{site}?mode=json` with `skip` and `limit` paging; EU host support.
+  _Note from T2.01:_ Implement `JobSource` with key `lever:<site>`; the same rules as T2.02 apply.
   _Done when:_ fixture tests pass and a live fetch of one public board works.
 
 - [ ] **T2.04 Build the Ashby client** (P0) · Depends on T2.01
@@ -216,6 +218,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 - [ ] **T2.10 Build the normalizer** (P0) · Depends on T2.01
   HTML to plain text (capped at 8,000 characters for prompts); work mode (Remote, Hybrid, Onsite, Unknown); region and work-authorization limits; salary ranges, including Indian formats such as "12–18 LPA"; company-name normalization.
+  _Note from T2.01:_ The pipeline calls `SourceSync.fetchNew`, stores the new postings as jobs (normalizing and deduplicating them), and only then calls `SourceSync.commit`. Store each posting with `Job.source` equal to the source's `key`.
   _Done when:_ a table-driven test of at least 50 real postings passes.
 
 - [ ] **T2.11 Build the deduplicator** (P0) · Depends on T2.10

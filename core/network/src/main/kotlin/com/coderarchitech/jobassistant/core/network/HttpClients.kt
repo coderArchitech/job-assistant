@@ -79,6 +79,8 @@ internal class HttpClientFactory(
             // Application interceptors run once per call, so the retry loop sits inside them; the host check
             // is first so a blocked request never opens a connection.
             .addInterceptor(hostPolicy)
+            // Job boards get at most two requests at a time per host; waiting here also covers retries.
+            .apply { if (group == NetworkGroup.JOB_SOURCES) addInterceptor(HostLimitInterceptor()) }
             .addInterceptor(retry)
             // Redirect hops never pass through application interceptors, so the host check runs here too.
             .addNetworkInterceptor(hostPolicy)
