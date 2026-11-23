@@ -29,6 +29,29 @@ class MigrationTest {
     val helper =
         MigrationTestHelper(InstrumentationRegistry.getInstrumentation(), AgentDatabase::class.java)
 
+    /** Version 2 adds the cache-write token count to usage rows; existing rows keep their data and get 0. */
+    @Test
+    fun migrate1To2() {
+        helper.createDatabase(DB_NAME, 1).apply {
+            execSQL(
+                "INSERT INTO usage_record (id, runId, provider, model, task, inputTokens, outputTokens, " +
+                    "cachedTokens, estimatedCostMicros, recordedAt) " +
+                    "VALUES (7, NULL, 'ANTHROPIC', 'm', 'SCORE', 1500, 200, 1000, 4200, 1000)",
+            )
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(DB_NAME, 2, true, *AgentMigrations.ALL.toTypedArray())
+
+        val columns = "inputTokens, outputTokens, cachedTokens, cacheWriteTokens, estimatedCostMicros"
+        db.query("SELECT $columns FROM usage_record WHERE id = 7").use {
+            assertEquals(1, it.count)
+            it.moveToFirst()
+            assertEquals(listOf(1500L, 200L, 1000L, 0L, 4200L), (0..4).map(it::getLong))
+        }
+        db.close()
+    }
+
     /** Version 1 has nothing to migrate from; this proves its exported schema can build a database. */
     @Test
     fun createsVersion1() {

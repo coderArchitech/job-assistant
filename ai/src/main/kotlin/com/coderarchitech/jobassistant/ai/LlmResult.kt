@@ -82,6 +82,9 @@ enum class BlockReason {
 
     /** The vault could not be read, so the request could not be checked for secrets (T1.15). Nothing is sent. */
     SECRET_CHECK_UNAVAILABLE,
+
+    /** The budget or this month's spend could not be read; the call is refused, not allowed on a guess (T1.14). */
+    BUDGET_UNAVAILABLE,
 }
 
 /**

@@ -133,6 +133,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Note from T1.11:_ Extend `LlmProviderContract` (`:ai` tests) and serve each `Scenario` from MockWebServer. Map `input_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens` straight into `TokenUsage`. Check whether structured outputs accept value keywords such as `minimum` and `maxLength`; the design keeps those limits in the Kotlin type.
   _Note from T1.10:_ Inject `@HttpClientFor(NetworkGroup.AI) OkHttpClient`. It already retries 429, 529 and 5xx and returns the last response, so map a final 429 or 529 to `RateLimited(retryAfter)` from its `Retry-After` header, a 401 or 403 to `InvalidKey`, and an `IOException` (including `BlockedRequestException`) to `NetworkError`. Do not add a second retry loop.
   _Note from T1.15:_ Wire the provider as `GuardedLlmProvider(…, secretScanner)`, outermost, in the Hilt module that provides it. Nothing constructs the guard yet, so until this is done requests are not scanned.
+  _Note from T1.14:_ Provide the provider as `GuardedLlmProvider(MeteredLlmProvider(raw, ledger, budgets, prices, models, clock), scanner)`. `ModelResolver` must return the model the provider will really use for the task (the user's override or the default), and `UsageLedger`, `BudgetSource` and `Clock` need a Hilt binding (`UsageLedger` and `BudgetSource` are already bound in `:core:data`). Pass `UsageRunId(runId)` in the coroutine context of a run's calls.
   _Done when:_ the contract suite passes against recorded fixtures, and one live smoke test passes with a real key.
 
 - [ ] **T1.13 Implement the OpenAI provider** (P0) · Depends on T1.01, T1.10, T1.11
@@ -140,9 +141,10 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Note from T1.11:_ Extend `LlmProviderContract` (`:ai` tests). OpenAI's `prompt_tokens` includes `cached_tokens`: set `TokenUsage.inputTokens` to the difference and `cacheReadInputTokens` to `cached_tokens`.
   _Note from T1.10:_ Inject `@HttpClientFor(NetworkGroup.AI) OkHttpClient` and the shared `Json`. Retries are already done by the client, so do not add a second loop; map the final status as in T1.12.
   _Note from T1.15:_ Wire the provider as `GuardedLlmProvider(…, secretScanner)`, outermost, as in T1.12.
+  _Note from T1.14:_ Wrap the provider the same way as T1.12, with `MeteredLlmProvider` inside `GuardedLlmProvider`.
   _Done when:_ the contract suite passes against recorded fixtures, and one live smoke test passes with a real key.
 
-- [ ] **T1.14 Add usage metering and the budget guard** (P0) · Depends on T1.03, T1.11
+- [x] **T1.14 Add usage metering and the budget guard** (P0) · Depends on T1.03, T1.11 · [#26](https://github.com/coderArchitech/job-assistant/pull/26)
   Write a `UsageRecord` for every call, priced from the price table. Before each call, refuse it if month-to-date spend plus a worst-case estimate would exceed the cap; then pause the agent and show the reason on Home.
   _Note from T1.06:_ Fail closed: if `SettingsRepository.settings` fails (it does after repeated I/O errors), pause AI calls rather than assume a budget.
   _Note from T1.11:_ `TokenUsage` splits input into uncached, cache-read and cache-write tokens (cache writes cost more than base input on Anthropic). `UsageRecord` in `:core:model` has only `cachedTokens`, so add a cache-write count before pricing. Return `LlmResult.Blocked(BUDGET_EXCEEDED)` for a refused call. `FakeLlmProvider` and `LlmProviderContract` sit in `:ai` tests; move them to a shared test-fixtures source set if the guard's tests live outside `:ai`.
@@ -314,6 +316,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 - [ ] **T3.09 Build the config host client** (P0) · Depends on T1.10, D07
   Fetch adapter bundles and the price table; verify Ed25519 signatures against the two public keys in the app (current and next, D07); fall back to the last good or bundled version; respect `minAppVersion`.
   _Note from T1.10:_ Use `@HttpClientFor(NetworkGroup.CONFIG)`. It reaches only the host in `BuildInfo.configHost`, so a blank host means every call fails with `BlockedRequestException`; treat that as "config host not set".
+  _Note from T1.14:_ Implement `PriceTable` (in `:ai`) from the signed price table, with the user's edits. Models it does not list are priced at `FallbackPricing.PRICE`, so list every model the app offers.
   _Done when:_ a tampered bundle is rejected and the bundled version is used.
 
 - [ ] **T3.10 Set up the config host** (P0) · Depends on D07
@@ -447,6 +450,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 - [ ] **T4.12 Build the Home screen** (P0) · Depends on T4.09, T3.25
   Counts by status, next run estimate, "Run now", items needing attention (OTP, `NeedsInput`, degraded adapters, budget pause), AI cost today.
+  _Note from T1.14:_ Show why AI work stopped when a call returns `LlmResult.Blocked`: `BUDGET_EXCEEDED` (the monthly cap or the browser agent's daily budget), `BUDGET_UNAVAILABLE` (settings or the database could not be read) or `SECRET_IN_PROMPT`. The pipeline runner pauses the agent on the first two.
   _Done when:_ every alert type in the design appears on Home in a test.
 
 - [ ] **T4.13 Build the usage meter** (P0) · Depends on T1.14

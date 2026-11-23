@@ -246,6 +246,7 @@ fun sampleUsage(
     inputTokens = 1_500,
     outputTokens = 200,
     cachedTokens = 1_000,
+    cacheWriteTokens = 300,
     estimatedCostMicros = costMicros,
     recordedAt = recordedAt,
 )

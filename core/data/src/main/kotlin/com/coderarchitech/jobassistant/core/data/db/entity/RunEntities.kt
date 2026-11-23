@@ -1,5 +1,6 @@
 package com.coderarchitech.jobassistant.core.data.db.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -63,6 +64,8 @@ data class UsageRecordEntity(
     val cachedTokens: Long,
     val estimatedCostMicros: Long,
     val recordedAt: Instant,
+    // Added in schema version 2; the default is what the migration gives existing rows.
+    @ColumnInfo(defaultValue = "0") val cacheWriteTokens: Long = 0,
 )
 
 /**
@@ -100,6 +103,7 @@ fun UsageRecord.toEntity() =
         cachedTokens = cachedTokens,
         estimatedCostMicros = estimatedCostMicros,
         recordedAt = recordedAt,
+        cacheWriteTokens = cacheWriteTokens,
     )
 
 /** Maps a stored usage row back to the domain type. */
@@ -115,6 +119,7 @@ fun UsageRecordEntity.toModel() =
         cachedTokens = cachedTokens,
         estimatedCostMicros = estimatedCostMicros,
         recordedAt = recordedAt,
+        cacheWriteTokens = cacheWriteTokens,
     )
 
 /** Maps a daily report to its stored row. */

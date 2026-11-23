@@ -33,6 +33,7 @@ class SchemaGuardsTest : DatabaseTest() {
                 "usage_record" to "inputTokens",
                 "usage_record" to "outputTokens",
                 "usage_record" to "cachedTokens",
+                "usage_record" to "cacheWriteTokens",
             )
         val offenders =
             columns.filter { column ->

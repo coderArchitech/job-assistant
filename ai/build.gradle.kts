@@ -11,6 +11,7 @@ dependencies {
     // The prompt guard scans requests for vault values and the last OTP (T1.15).
     implementation(projects.core.security)
     implementation(libs.timber)
+    implementation(libs.kotlinx.coroutines.core)
 
     testImplementation(libs.kotlinx.coroutines.test)
 }
