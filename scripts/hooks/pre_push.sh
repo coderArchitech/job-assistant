@@ -21,6 +21,7 @@ run() {
 }
 
 run "Safety rules" python3 scripts/ci/check_forbidden_patterns.py
+run "Migration tests exist" python3 scripts/ci/check_migration_tests.py
 run "TASK.md consistency" python3 scripts/ci/check_task_md.py
 run "Docs links" python3 scripts/ci/check_md_links.py
 

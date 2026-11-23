@@ -23,7 +23,7 @@ Run `git diff --name-only origin/main...HEAD` plus uncommitted changes, and map 
 | Every device test | `./gradlew deviceTest` (what CI runs on API 29, 34 and 36) |
 | `portals/scripts/**` | `npm --prefix portals/scripts test` (Playwright; exists from task T3.11) |
 | Prompts or default models | The golden-set script; report tier agreement and cost per job |
-| Docs, `TASK.md` or CI scripts | `python3 scripts/ci/check_md_links.py`, `python3 scripts/ci/check_task_md.py`, `python3 scripts/ci/check_forbidden_patterns.py` |
+| Docs, `TASK.md` or CI scripts | `python3 scripts/ci/check_md_links.py`, `python3 scripts/ci/check_task_md.py`, `python3 scripts/ci/check_forbidden_patterns.py`, `python3 scripts/ci/check_migration_tests.py` |
 
 `unitTest` and `staticChecks` exist in every module, so running them at the root covers everything. If a command named here does not exist yet, say so and stop. Do not invent commands.
 

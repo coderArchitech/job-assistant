@@ -72,6 +72,16 @@ jobs:
           python-version: "3.12"
       - run: python3 scripts/ci/check_forbidden_patterns.py
 
+  migration-tests:
+    name: Every schema version has a migration test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python3 scripts/ci/check_migration_tests.py
+
   task-md:
     name: TASK.md consistency
     runs-on: ubuntu-latest

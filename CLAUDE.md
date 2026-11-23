@@ -101,6 +101,7 @@ These come from the PRD and design. A PR that breaks one is not mergeable.
 | PR title has a task ID | Regex in the workflow | Rename the PR (`T1.07: ...` or `docs: ...`) |
 | Secret scan | gitleaks on the PR's commits | Remove the secret, rotate it, and rewrite the commit before merging |
 | Safety rules | `scripts/ci/check_forbidden_patterns.py` | `python3 scripts/ci/check_forbidden_patterns.py` |
+| Migration tests exist | `scripts/ci/check_migration_tests.py` | `python3 scripts/ci/check_migration_tests.py` |
 | `TASK.md` consistency | `scripts/ci/check_task_md.py` | `python3 scripts/ci/check_task_md.py` |
 | Docs links and formatting | `scripts/ci/check_md_links.py`, markdownlint | `python3 scripts/ci/check_md_links.py` and `npx markdownlint-cli2@0.17.2 --fix` |
 
