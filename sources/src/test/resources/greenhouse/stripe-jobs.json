@@ -1,0 +1,159 @@
+{
+  "jobs": [
+    {
+      "id": 8172510,
+      "internal_job_id": 3537063,
+      "title": "Abuse Investigator",
+      "company_name": "Stripe",
+      "location": {
+        "name": "Seattle, San Francisco, New York City"
+      },
+      "absolute_url": "https://stripe.com/jobs/search?gh_jid=8172510",
+      "updated_at": "2026-11-19T12:12:24-05:00",
+      "first_published": "2026-09-09T10:50:29-04:00",
+      "language": "en",
+      "metadata": null,
+      "content": "&lt;h2&gt;Who we are&lt;/h2&gt;\n&lt;p&gt;Fixture text for Abuse Investigator. R&amp;D &amp; &quot;quotes&quot;.&lt;/p&gt;",
+      "departments": [
+        {
+          "id": 81946,
+          "name": "8611 Security Analytics",
+          "child_ids": [],
+          "parent_id": 78876
+        }
+      ],
+      "offices": [
+        {
+          "id": 1,
+          "name": "US",
+          "location": null,
+          "child_ids": [
+            2
+          ],
+          "parent_id": null
+        }
+      ],
+      "requisition_id": "See Opening ID",
+      "data_compliance": [
+        {
+          "type": "gdpr",
+          "requires_consent": false
+        }
+      ]
+    },
+    {
+      "id": 8332467,
+      "internal_job_id": 3601697,
+      "title": "Account Executive, AI Sales",
+      "company_name": "Stripe",
+      "location": {
+        "name": "San Francisco, CA"
+      },
+      "absolute_url": "https://stripe.com/jobs/search?gh_jid=8332467",
+      "updated_at": "2026-11-19T12:12:30-05:00",
+      "first_published": "2026-11-06T10:32:55-05:00",
+      "language": "en",
+      "metadata": null,
+      "content": "&lt;h2&gt;Who we are&lt;/h2&gt;\n&lt;p&gt;Fixture text for Account Executive, AI Sales. R&amp;D &amp; &quot;quotes&quot;.&lt;/p&gt;",
+      "departments": [
+        {
+          "id": 380786,
+          "name": "1654 Account Executives (AI)",
+          "child_ids": [],
+          "parent_id": 297997
+        }
+      ],
+      "offices": [
+        {
+          "id": 1,
+          "name": "US",
+          "location": null,
+          "child_ids": [
+            2
+          ],
+          "parent_id": null
+        }
+      ],
+      "requisition_id": "See Opening ID",
+      "data_compliance": [
+        {
+          "type": "gdpr",
+          "requires_consent": false
+        }
+      ]
+    },
+    {
+      "id": 8138044,
+      "internal_job_id": 3522152,
+      "title": "Account Executive, AI Sales",
+      "company_name": "Stripe",
+      "location": {
+        "name": "San Francisco, CA"
+      },
+      "absolute_url": "https://stripe.com/jobs/search?gh_jid=8138044",
+      "updated_at": "2026-11-19T12:12:23-05:00",
+      "first_published": "2026-09-18T13:27:51-04:00",
+      "language": "en",
+      "metadata": null,
+      "content": "&lt;h2&gt;Who we are&lt;/h2&gt;\n&lt;p&gt;Fixture text for Account Executive, AI Sales. R&amp;D &amp; &quot;quotes&quot;.&lt;/p&gt;",
+      "departments": [
+        {
+          "id": 380786,
+          "name": "1654 Account Executives (AI)",
+          "child_ids": [],
+          "parent_id": 297997
+        }
+      ],
+      "offices": [
+        {
+          "id": 1,
+          "name": "US",
+          "location": null,
+          "child_ids": [
+            2
+          ],
+          "parent_id": null
+        }
+      ],
+      "requisition_id": "See Opening ID",
+      "data_compliance": [
+        {
+          "type": "gdpr",
+          "requires_consent": false
+        }
+      ]
+    },
+    {
+      "id": 900001,
+      "title": "Platform engineer",
+      "absolute_url": "https://example.com/jobs/900001",
+      "updated_at": "2026-11-01T09:00:00-05:00",
+      "location": {
+        "name": "Remote"
+      },
+      "content": null,
+      "departments": [],
+      "offices": []
+    },
+    {
+      "id": 900002,
+      "title": "   ",
+      "absolute_url": "https://example.com/jobs/900002",
+      "updated_at": "2026-11-01T09:00:00-05:00",
+      "location": {
+        "name": "Remote"
+      }
+    },
+    {
+      "id": 900003,
+      "title": "Data analyst",
+      "absolute_url": "https://example.com/jobs/900003",
+      "updated_at": "not a date",
+      "first_published": "also not a date",
+      "location": null
+    }
+  ],
+  "meta": {
+    "total": 6
+  }
+}
