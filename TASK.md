@@ -131,11 +131,13 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 - [ ] **T1.12 Implement the Anthropic provider** (P0) · Depends on T1.01, T1.10, T1.11
   Official `anthropic-java` SDK (D01). Messages API with structured outputs (`output_config.format`) from a hand-written JSON Schema, never the class-derived overload; `GET /v1/models` for the key check and model list; prompt caching on the stable prefix; `stop_reason` handling, including `refusal`; no sampling parameters sent; usage (including cached tokens) mapped to `UsageRecord`.
   _Note from T1.11:_ Extend `LlmProviderContract` (`:ai` tests) and serve each `Scenario` from MockWebServer. Map `input_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens` straight into `TokenUsage`. Check whether structured outputs accept value keywords such as `minimum` and `maxLength`; the design keeps those limits in the Kotlin type.
+  _Note from T1.10:_ Inject `@HttpClientFor(NetworkGroup.AI) OkHttpClient`. It already retries 429, 529 and 5xx and returns the last response, so map a final 429 or 529 to `RateLimited(retryAfter)` from its `Retry-After` header, a 401 or 403 to `InvalidKey`, and an `IOException` (including `BlockedRequestException`) to `NetworkError`. Do not add a second retry loop.
   _Done when:_ the contract suite passes against recorded fixtures, and one live smoke test passes with a real key.
 
 - [ ] **T1.13 Implement the OpenAI provider** (P0) · Depends on T1.01, T1.10, T1.11
   Thin client on OkHttp and kotlinx.serialization (D01). Structured Outputs with a strict JSON schema, `GET /v1/models` filtered by the remote allowlist, embeddings endpoint, and refusal and `finish_reason` handling.
   _Note from T1.11:_ Extend `LlmProviderContract` (`:ai` tests). OpenAI's `prompt_tokens` includes `cached_tokens`: set `TokenUsage.inputTokens` to the difference and `cacheReadInputTokens` to `cached_tokens`.
+  _Note from T1.10:_ Inject `@HttpClientFor(NetworkGroup.AI) OkHttpClient` and the shared `Json`. Retries are already done by the client, so do not add a second loop; map the final status as in T1.12.
   _Done when:_ the contract suite passes against recorded fixtures, and one live smoke test passes with a real key.
 
 - [ ] **T1.14 Add usage metering and the budget guard** (P0) · Depends on T1.03, T1.11
@@ -308,6 +310,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 - [ ] **T3.09 Build the config host client** (P0) · Depends on T1.10, D07
   Fetch adapter bundles and the price table; verify Ed25519 signatures against the two public keys in the app (current and next, D07); fall back to the last good or bundled version; respect `minAppVersion`.
+  _Note from T1.10:_ Use `@HttpClientFor(NetworkGroup.CONFIG)`. It reaches only the host in `BuildInfo.configHost`, so a blank host means every call fails with `BlockedRequestException`; treat that as "config host not set".
   _Done when:_ a tampered bundle is rejected and the bundled version is used.
 
 - [ ] **T3.10 Set up the config host** (P0) · Depends on D07
@@ -396,6 +399,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 - [ ] **T4.02 Implement Google authorization** (P1) · Depends on T0.02
   Identity `AuthorizationClient` with only `gmail.send`; no stored refresh token; silent re-authorization in the background, with a "reconnect" notification when it fails. Onboarding step 6.
+  _Note from T1.10:_ Use `@HttpClientFor(NetworkGroup.GOOGLE)`, which reaches `accounts.google.com` and `*.googleapis.com` only. Add a host to `HostPolicy` if Google needs another one, with a test.
   _Done when:_ a background send gets a token silently after first consent.
 
 - [ ] **T4.03 Send recruiter emails** (P1) · Depends on T4.02, T3.02

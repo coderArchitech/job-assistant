@@ -42,7 +42,7 @@ The app is split into Gradle modules along the README's package layout, so the p
 | `:core:model` | Pure Kotlin domain types (`Job`, `Profile`, `MatchResult`, enums) | — |
 | `:core:data` | Room database, DAOs, repositories, migrations, DataStore settings | `:core:model` |
 | `:core:security` | Credential vault, key management, biometric gate, log and prompt redaction | `:core:model` |
-| `:core:network` | OkHttp clients per destination group, retry and backoff, JSON config | — |
+| `:core:network` | OkHttp clients per destination group, retry and backoff, JSON config | `:core:model` |
 | `:core:config` | Fetches and verifies signed adapter scripts and the model price table from the static config host | `:core:network`, `:core:security` |
 | `:ai` | `LlmProvider` and `Embedder` interfaces, Anthropic and OpenAI clients, prompt templates, output schemas, usage metering | `:core:network`, `:core:model` |
 | `:sources` | Job-board API clients, normalizer, deduplicator | `:core:network`, `:core:model` |
@@ -286,6 +286,20 @@ Rules that follow from the spike:
 **Structured output, not forced tools.** Current Claude models reject forced `tool_choice`, so every task that needs JSON uses the schema-constrained output mode with a hand-written JSON Schema (D01). Each response is still parsed and validated against the Kotlin type; a failure is retried once, then the job is marked `Failed` with the raw text kept for debugging.
 
 **Retries.** HTTP 429, 529 and 5xx retry up to 3 times with exponential backoff and jitter, honoring `retry-after`. HTTP 401 marks the key invalid, pauses the agent and notifies. Other 4xx errors fail the call without a retry.
+
+**Network layer** (`:core:network`, task T1.10). Every outgoing call goes through an `OkHttpClient` that Hilt provides per destination group, selected with `@HttpClientFor(NetworkGroup.X)`. The clients share one connection pool and dispatcher, and differ only in what follows.
+
+| Group | Hosts it may reach | Read timeout |
+| --- | --- | --- |
+| `AI` | `api.anthropic.com`, `api.openai.com` | 2 minutes |
+| `JOB_SOURCES` | any HTTPS host except `linkedin.com` and its subdomains | 30 seconds |
+| `GOOGLE` | `accounts.google.com` and `*.googleapis.com` | 30 seconds |
+| `CONFIG` | the config host from `BuildInfo.configHost`; nothing until it is set (T3.10) | 30 seconds |
+
+- **HTTPS only, twice.** The clients accept only TLS connections and refuse any other host with a `BlockedRequestException` (an `IOException`) before a connection opens. The same check runs on every redirect hop. The app also ships `network_security_config.xml`: cleartext off, system trust store only, no user-installed CAs in any build type. `NetworkSecurityConfigTest` pins it.
+- **Retries.** `RetryInterceptor` retries 429, 529 and 5xx up to 3 times. The wait is `retry-after` (seconds or an HTTP date) when the server sends one, otherwise 1 s doubling to a 30 s cap, with the wait landing in the upper half of that range. A `retry-after` over 60 s ends the retries and returns the response, so the caller can report `RateLimited(retryAfter)` instead of sleeping. Any other status, including 400, 401, 403 and 404, is returned at once. After the last retry the last response is returned unchanged. Requests with a one-shot body are never retried, and transport failures are not retried here (the provider reports `NetworkError`). The whole call, waits included, is capped by the client's call timeout, and cancelling the call ends a wait within 200 ms.
+- **Logging.** Debug builds only (`BuildConfig.HTTP_LOGGING`): request and response headers, never bodies, with `Authorization`, `Proxy-Authorization`, `x-api-key`, `Cookie`, `Set-Cookie` and the query parameters `key`, `api_key`, `access_token`, `token`, `code` and `client_secret` replaced by `██`. Release builds add no logging interceptor at all.
+- **JSON.** One shared `NetworkJson` (also injectable as `Json`) ignores unknown fields and treats a null and a missing field alike.
 
 **Usage and budget.** Every response's token usage (uncached input, cache reads, cache writes and output) is written to `UsageRecord` and priced from the signed price table, which the user can edit. Before each call the guard adds a worst-case estimate (input tokens plus `maxOutputTokens` at list price) to month-to-date spend; if that exceeds the cap, the call is refused, the agent pauses and Home shows why.
 
