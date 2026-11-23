@@ -194,7 +194,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   Confirm the posting API endpoint first; include compensation.
   _Done when:_ fixture tests pass and a live fetch of one public board works.
 
-- [x] **T2.05 Build the RemoteOK client** (P0) · Depends on T2.01 · [#PR](https://github.com/coderArchitech/job-assistant/pull/PR)
+- [x] **T2.05 Build the RemoteOK client** (P0) · Depends on T2.01 · [#33](https://github.com/coderArchitech/job-assistant/pull/33)
   Skip the legal-notice element; show the required credit and link back in the UI.
   _Done when:_ fixture tests pass, and Job detail shows the source credit.
   _Note:_ the client and `RemoteOkCredit` (name and link) are done. Job detail does not exist yet, so showing the credit is part of T2.21.
