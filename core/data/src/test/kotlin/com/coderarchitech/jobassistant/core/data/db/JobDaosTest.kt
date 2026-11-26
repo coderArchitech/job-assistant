@@ -224,7 +224,7 @@ class JobDaosTest : DatabaseTest() {
         }
 
     @Test
-    fun recentDecisionsComeNewestFirstAndRespectTheLimit() =
+    fun theLatestDecisionOnAJobIsItsExample() =
         runTest {
             val job = insertJob()
             val dao = db.decisionDao()
@@ -232,7 +232,7 @@ class JobDaosTest : DatabaseTest() {
             dao.insert(sampleDecision(job, Verdict.APPROVE, T0.plusSeconds(60)).toEntity())
             dao.insert(sampleDecision(job, Verdict.REJECT, T0.plusSeconds(120)).toEntity())
 
-            assertEquals(listOf(Verdict.REJECT, Verdict.APPROVE), dao.getRecent(limit = 2).map { it.verdict })
+            assertEquals(listOf(Verdict.REJECT), dao.getLatestExamples(limit = 2).map { it.verdict })
             assertEquals(T0.plusSeconds(120), dao.getLatestForJob(job)?.decidedAt)
         }
 

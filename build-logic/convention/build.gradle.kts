@@ -35,6 +35,10 @@ gradlePlugin {
             id = "jobassistant.android.hilt"
             implementationClass = "AndroidHiltConventionPlugin"
         }
+        register("androidRobolectric") {
+            id = "jobassistant.android.robolectric"
+            implementationClass = "AndroidRobolectricConventionPlugin"
+        }
         register("androidFeature") {
             id = "jobassistant.android.feature"
             implementationClass = "AndroidFeatureConventionPlugin"

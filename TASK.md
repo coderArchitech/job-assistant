@@ -51,9 +51,10 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ a PR shows all checks, and a failing test blocks merging.
   _Workflows added in [#4](https://github.com/coderArchitech/job-assistant/pull/4) and all checks run on PRs. Still open: make the checks required in branch protection (T0.08) so a failing test blocks merging._
 
-- [ ] **T0.06 Define build types and flavors** (P0) · Depends on T0.01
+- [x] **T0.06 Define build types and flavors** (P0) · Depends on T0.01 · [#41](https://github.com/coderArchitech/job-assistant/pull/41)
   `debug` and `release` build types; `dev` and `prod` flavors (dev points at a test config host). HTTP logging only in debug.
   _Done when:_ both flavors install side by side on one device.
+  _Note:_ `CONFIG_HOST` is set per flavor from `gradle.properties` and is empty until the config host exists; pointing dev at a test host is part of T3.10.
 
 - [ ] **T0.07 Set up release signing** (P0)
   Play App Signing enrolled; the upload key is kept outside the repo, in CI secrets.
@@ -164,6 +165,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ three sample resumes produce profiles a user can confirm without retyping more than one field each.
 
 - [ ] **T1.17 Build the app shell and onboarding skeleton** (P0) · Depends on T0.03, T1.06, T1.12, T1.13
+  _Note from T2.09:_ `MainActivity` switches between Home and `WatchlistRoute` with a saved flag until this task's navigation graph replaces it; Home's "Company watchlist" button is the entry point to move into it.
   Navigation graph, bottom navigation (Home, Jobs, Review, Portals, Settings), light and dark themes, and onboarding steps 1–4: consent, resume, preferences and context, AI provider (key entry, "Validate key", model picker per task with defaults). Edge-to-edge insets handled on every screen.
   _Note (owner, 2026-11-18):_ Depends on T1.12 and T1.13 because its Done when validates a real key, which needs a provider.
   _Done when:_ a new install reaches Home after validating a key on either provider.
@@ -204,7 +206,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ fixture tests pass, and the client never exceeds the documented rate.
   _Note:_ the documented rate is at most 4 requests a day and 2 a minute, and the client enforces it. `RemotiveCredit` and the 6-hour rule need the pipeline and Job detail: see T2.20 and T2.21.
 
-- [ ] **T2.07 Build the We Work Remotely RSS client** (P0) · Depends on T2.01
+- [x] **T2.07 Build the We Work Remotely RSS client** (P0) · Depends on T2.01 · [#35](https://github.com/coderArchitech/job-assistant/pull/35)
   XML pull parser over the category feeds.
   _Done when:_ fixture tests pass for at least two feeds.
 
@@ -212,20 +214,21 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   Find the monthly thread through the Algolia HN API, fetch its comments, pre-filter with regex (a role keyword and either remote or the user's location, per D10), send at most 100 comments a month to the scoring model, and extract postings with it.
   _Done when:_ one month's thread yields structured postings at a measured, logged cost.
 
-- [ ] **T2.09 Build the company watchlist** (P0) · Depends on T1.03
+- [x] **T2.09 Build the company watchlist** (P0) · Depends on T1.03 · [#42](https://github.com/coderArchitech/job-assistant/pull/42)
   CRUD screen for companies with ATS type and board slug, and a "check board" button that validates the slug.
   _Note from T2.02:_ "Check board" calls `GreenhouseSource(slug, name, client).checkBoard()`, which returns `BoardCheck.Valid(jobCount)`, `NotFound` or `Failed(message)` and never throws. `LeverSource` (T2.03) and `AshbySource` (T2.04) offer the same call. `JobSource` clients are built per watchlist entry with `@HttpClientFor(NetworkGroup.JOB_SOURCES)`.
   _Done when:_ a user adds a Greenhouse, a Lever and an Ashby company and each check passes.
 
 ### Normalization and deduplication
 
-- [ ] **T2.10 Build the normalizer** (P0) · Depends on T2.01
+- [x] **T2.10 Build the normalizer** (P0) · Depends on T2.01 · [#36](https://github.com/coderArchitech/job-assistant/pull/36)
   HTML to plain text (capped at 8,000 characters for prompts); work mode (Remote, Hybrid, Onsite, Unknown); region and work-authorization limits; salary ranges, including Indian formats such as "12–18 LPA"; company-name normalization.
   _Note from T2.01:_ The pipeline calls `SourceSync.fetchNew`, stores the new postings as jobs (normalizing and deduplicating them), and only then calls `SourceSync.commit`. Store each posting with `Job.source` equal to the source's `key`.
   _Note from T2.02:_ `RawPosting.description` from Greenhouse is HTML with the entity escaping already removed, and `postedAt` is the first-published date. The live check for a board is `JOBASSISTANT_LIVE=1 ./gradlew :sources:testDebugUnitTest --tests '*GreenhouseLiveTest'`.
   _Done when:_ a table-driven test of at least 50 real postings passes.
 
-- [ ] **T2.11 Build the deduplicator** (P0) · Depends on T2.10
+- [x] **T2.11 Build the deduplicator** (P0) · Depends on T2.10 · [#37](https://github.com/coderArchitech/job-assistant/pull/37)
+  _Note from T2.10:_ `JobNormalizer.normalize(raw, sourceKey)` gives a `NormalizedPosting` with `companyKey` (`CompanyNames.key`, the normalized company for `dedupeHash`) but no canonical URL or hash; those are this task's.
   Three steps: same source and external ID; same canonical URL; same `dedupeHash` of company and title. Keep the ATS copy as primary and store the others as aliases.
   _Done when:_ a fixture set with known cross-source duplicates collapses to the expected count.
 
@@ -239,7 +242,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 ### Scoring
 
-- [ ] **T2.14 Implement hard filters** (P0) · Depends on T2.10
+- [x] **T2.14 Implement hard filters** (P0) · Depends on T2.10 · [#38](https://github.com/coderArchitech/job-assistant/pull/38)
   Deal-breakers, seniority from the title, work mode, and region or authorization limits. A failed job gets score 0 and the rule's name as its reason.
   _Done when:_ a labeled set shows every "remote, US only" posting filtered for an India-based profile.
 
@@ -252,22 +255,27 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ the floor is tuned on the golden set (T2.19) and recorded in settings defaults.
 
 - [ ] **T2.17 Implement LLM scoring** (P0) · Depends on T1.12, T1.13, T1.14
+  _Note from T2.18:_ at the start of each run call `ScoringExamples.forNewRun()` once and put the part (when not null) in `LlmRequest.context` after the profile and preset context, for every job in the run.
   The scoring prompt (rubric, profile, context, the last 10 decisions, then the job) with the score JSON schema; tier computed in the app from score and thresholds; score cache keyed on job, profile version, context hash and model.
   _Done when:_ changing a threshold re-tiers stored jobs with no AI calls (BR4).
 
-- [ ] **T2.18 Record decisions as feedback** (P0) · Depends on T1.03
+- [x] **T2.18 Record decisions as feedback** (P0) · Depends on T1.03 · [#39](https://github.com/coderArchitech/job-assistant/pull/39)
   Approve and reject decisions saved as `Decision` rows and used as examples in the next run's scoring prompt.
   _Done when:_ a new run's prompt contains the latest decisions.
+  _Note:_ verified on the examples part the prompt will carry (`ScoringExamplesTest`); the scoring prompt itself is T2.17 and the Review screen that records decisions is T2.22, which use it as their notes say.
 
 - [ ] **T2.19 Build the scoring golden set** (P0) · Depends on T2.17
+  _Note from T2.18:_ the examples block (`ScoringExamples.HEADER` and one line per decision) is part of the scoring prompt, so the golden-set run covers it; CLAUDE.md asks for a golden-set result on prompt changes, and none exists yet.
   About 50 labeled jobs, including the BR5 case ("no service companies"); a script that reports tier agreement and cost per job.
   _Done when:_ the report runs in CI on prompt changes and shows the BR5 case moving as expected.
 
 ### Pipeline and screens
 
 - [ ] **T2.20 Build the background pipeline** (P0) · Depends on T2.01, T2.17, T1.05
+  _Note from T4.13:_ when the metered provider refuses a call with `BlockReason.BUDGET_EXCEEDED`, end the run as paused and say why; the usage meter already tells the user the budget is reached.
   `DiscoverWorker` and `ScoreWorker` (batches of 25 that re-enqueue), a unique periodic request per preset (`run:<presetId>`), a unique one-time chain per tick (`KEEP`), network, charging and battery constraints, "Run now" as expedited work, a `Run` record with per-stage counts, and the "new matches" notification.
   _Done when:_ a run of 200 jobs finishes in under 15 minutes on Wi-Fi and at least 70% of jobs are removed before the LLM.
+  _Note from T2.11:_ for each `NormalizedPosting`, look up the stored jobs by (source, externalId), canonical URL and `dedupeHash` (`JobDao` has all three), build `StoredMatches` and apply `Deduplicator.decide`: `New` inserts, `Update` refreshes the row, `Alias` inserts with `aliasOfJobId`, `NewPrimary` inserts and repoints the old primary and its aliases. `JobDao` has no update queries yet (by design, status changes go through `JobRepository`), so add narrow ones for refreshing a posting and repointing aliases. Within one run, `Deduplicator.collapse` first.
   _Note:_ fetch each source once per run and filter the one result for each preset: `RemotiveSource` refuses a second fetch inside 6 hours with `SourceThrottledException`, which is a skip, not a failure to show the user.
 
 - [ ] **T2.21 Build the Jobs screen** (P0) · Depends on T2.17, T1.17
@@ -275,6 +283,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ the High and Partial chips filter correctly (BR4), and Job detail shows `RemoteOkCredit` as a followed link on postings from the `remoteok` source (T2.05) and `RemotiveCredit` on postings from the `remotive` source (T2.06).
 
 - [ ] **T2.22 Build the Review screen** (P0) · Depends on T2.21, T2.18
+  _Note from T2.18:_ approve and reject call `DecisionLog.record(jobId, verdict, reason)` as well as the status move; the reason box is optional and kept to 280 characters.
   Swipe or tap to approve or reject, bulk approve for High match, and a draft preview area (filled by T3.03).
   _Done when:_ approving a job moves it to Approved and records a decision.
 
@@ -309,19 +318,21 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 ### WebView runtime
 
-- [ ] **T3.06 Build the WebView runtime** (P0) · Depends on T0.02
+- [x] **T3.06 Build the WebView runtime** (P0) · Depends on T0.02 · [#40](https://github.com/coderArchitech/job-assistant/pull/40)
   `AgentWebView` with hardened settings (no file or content access, Safe Browsing on, mixed content blocked, no `addJavascriptInterface`), a navigation allowlist per portal, and LinkedIn hosts always blocked.
   _Done when:_ a test page that tries to navigate off the allowlist is stopped.
 
 - [ ] **T3.07 Build the JS bridge** (P0) · Depends on T3.06
+  _Note from T3.06:_ build on `AgentWebView` (`:portals`, package `web`); it forbids `addJavascriptInterface`. A page framed from another origin is not seen by any WebView callback, so the bridge must accept messages only from the portal's own origins (the `NavigationPolicy` hosts), never from frames.
   `addWebMessageListener` restricted to portal origins; `addDocumentStartJavaScript` for adapter injection; typed commands (`query`, `click`, `type`, `select`, `upload`, `waitFor`, `snapshot`); file upload through `onShowFileChooser`; random 1.5–4 s pacing between actions.
   _Done when:_ a page from another origin cannot send bridge messages.
 
-- [ ] **T3.08 Isolate sessions per portal** (P0) · Depends on T3.06
+- [x] **T3.08 Isolate sessions per portal** (P0) · Depends on T3.06 · [#44](https://github.com/coderArchitech/job-assistant/pull/44)
   One WebView profile per portal through `ProfileStore`, with a shared `CookieManager` fallback where multi-profile is unsupported; per-portal wipe.
   _Done when:_ wiping one portal leaves another portal's session logged in.
 
 - [ ] **T3.09 Build the config host client** (P0) · Depends on T1.10, D07
+  _Note from T4.13:_ the usage meter (`:feature:settings`, `usage`) has no price-table editor yet; add an "Edit prices" screen there for the user's edits that `PriceTable` reads, since T4.13 left it to this task.
   Fetch adapter bundles and the price table; verify Ed25519 signatures against the two public keys in the app (current and next, D07); fall back to the last good or bundled version; respect `minAppVersion`.
   _Note from T1.10:_ Use `@HttpClientFor(NetworkGroup.CONFIG)`. It reaches only the host in `BuildInfo.configHost`, so a blank host means every call fails with `BlockedRequestException`; treat that as "config host not set".
   _Note from T1.14:_ Implement `PriceTable` (in `:ai`) from the signed price table, with the user's edits. Models it does not list are priced at `FallbackPricing.PRICE`, so list every model the app offers.
@@ -334,10 +345,12 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 ### Portal adapters
 
 - [ ] **T3.11 Build the adapter framework** (P0) · Depends on T3.07, T3.09
+  _Note from T3.08:_ call `PortalSessions.attach(webView, portal)` on each `AgentWebView` before its first load, and build `PortalSessions` with every portal so a fallback wipe spares their domains.
   `ScriptedPortalAdapter` implementing `PortalAdapter` (`login`, `search`, `getDetails`, `apply`, `healthCheck`); the manifest format (version, selectors, flows, health-check steps, `minAppVersion`).
   _Done when:_ a sample adapter passes the adapter test harness (T3.12).
 
 - [ ] **T3.12 Build the adapter test harness** (P0) · Depends on T3.11
+  _Note from T3.06:_ `AgentWebView` takes a `RequestInterceptor`; `AgentWebViewTest` already serves pages from the test APK through `WebViewAssetLoader` on `appassets.androidplatform.net`, which the harness can reuse.
   Saved HTML snapshots served through `WebViewAssetLoader` in instrumented tests; assertions on selectors, fill order and page classification.
   _Done when:_ a broken selector fails the harness in CI.
 
@@ -462,9 +475,10 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Note from T1.14:_ Show why AI work stopped when a call returns `LlmResult.Blocked`: `BUDGET_EXCEEDED` (the monthly cap or the browser agent's daily budget), `BUDGET_UNAVAILABLE` (settings or the database could not be read) or `SECRET_IN_PROMPT`. The pipeline runner pauses the agent on the first two.
   _Done when:_ every alert type in the design appears on Home in a test.
 
-- [ ] **T4.13 Build the usage meter** (P0) · Depends on T1.14
+- [x] **T4.13 Build the usage meter** (P0) · Depends on T1.14 · [#43](https://github.com/coderArchitech/job-assistant/pull/43)
   Tokens and cost per day and per run, monthly budget setting, and an editable price table.
   _Done when:_ per-run cost is visible (BR2) and the budget cap pauses runs.
+  _Note:_ done in #43 except the editable price table, which needs the `PriceTable` T3.09 builds from the signed price table; it moved there. The cap pausing runs is the budget guard (T1.14) refusing calls; the meter shows it, and stopping a run on that refusal is the pipeline's (T2.20).
 
 - [ ] **T4.14 Finish scheduling settings** (P0) · Depends on T2.20
   Schedule (3, 6 or 12 hours, or manual), Wi-Fi or any network, charging only; onboarding step 7 (schedule, caps, first run).
