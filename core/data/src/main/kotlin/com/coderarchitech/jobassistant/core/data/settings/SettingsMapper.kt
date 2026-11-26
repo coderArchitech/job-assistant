@@ -65,7 +65,8 @@ internal fun AppSettings.toProto(): SettingsProto =
                 .newBuilder()
                 .setAutoSendEmails(toggles.autoSendEmails)
                 .setEmailDigest(toggles.emailDigest),
-        ).build()
+        ).addAllPriceEdits(priceEdits.map { it.toPriceEditProto() })
+        .build()
 
 /**
  * Never throws: an absent field takes the domain default and an unknown enum name takes the default.
@@ -89,6 +90,7 @@ internal fun SettingsProto.toDomain(): AppSettings {
         budget = budget.toDomain(defaults.budget),
         ai = ai.toDomain(),
         toggles = toggles.toDomain(defaults.toggles),
+        priceEdits = priceEditsList.toPriceEdits(),
     )
 }
 

@@ -138,6 +138,44 @@ object Money {
             ?.multiply(MICROS_PER_DOLLAR)
             ?.toLong()
 
+    /** A price per million tokens: `$3.00`, `$0.075`; at least cents, never rounded away. */
+    fun perMillion(micros: Long): String {
+        val dollars = BigDecimal(micros).divide(MICROS_PER_DOLLAR).stripTrailingZeros()
+        return "$" + dollars.setScale(maxOf(CENTS, dollars.scale())).toPlainString()
+    }
+
+    /**
+     * A price per million tokens as typed (`3`, `$0.075`, `0,075`), to micros; null for anything else, a negative,
+     * more than $1,000 or finer than a millionth of a dollar. A comma is a decimal point, except that `1,000` could
+     * be a thousand or one, so a comma before exactly three digits is refused unless the whole part is 0.
+     */
+    fun parsePerMillion(text: String): Long? =
+        text
+            .trim()
+            .removePrefix("$")
+            .trim()
+            .let(::decimalComma)
+            ?.toBigDecimalOrNull()
+            ?.stripTrailingZeros()
+            ?.takeIf { it.signum() >= 0 && it <= MAX_PRICE_DOLLARS && it.scale() <= MICRO_SCALE }
+            ?.multiply(MICROS_PER_DOLLAR)
+            ?.toLong()
+
+    private fun decimalComma(text: String): String? {
+        val whole = text.substringBefore(',')
+        val fraction = text.substringAfter(',', "")
+        return when {
+            ',' !in text -> text
+            text.count { it == ',' } > 1 || '.' in text -> null
+            fraction.length == THOUSANDS_GROUP && whole.trimStart('0').isNotEmpty() -> null
+            else -> "$whole.$fraction"
+        }
+    }
+
+    private const val THOUSANDS_GROUP = 3
+    private val MAX_PRICE_DOLLARS = BigDecimal(1_000)
+    private const val MICRO_SCALE = 6
+
     /** `12.3k` rather than `12345`; exact token counts do not help a reader here. */
     fun tokens(count: Long): String {
         // Rounded first, so 999,960 is 1.0M rather than 1000.0k; a dot always, like the dollar amounts.

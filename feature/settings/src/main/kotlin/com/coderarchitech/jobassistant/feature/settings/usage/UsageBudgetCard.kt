@@ -51,6 +51,12 @@ internal fun MonthCard(
             ) {
                 actions.editBudget(BudgetField.BROWSER_AGENT_DAILY)
             }
+            BudgetLine(
+                stringResource(R.string.usage_prices),
+                stringResource(R.string.usage_prices_hint),
+                action = stringResource(R.string.usage_prices_open),
+                onEdit = actions.openPrices,
+            )
         }
     }
 }
@@ -116,6 +122,7 @@ private fun agentBudget(micros: Long): String =
 private fun BudgetLine(
     label: String,
     value: String,
+    action: String = stringResource(R.string.usage_change),
     onEdit: () -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -123,6 +130,6 @@ private fun BudgetLine(
             Text(label, style = MaterialTheme.typography.bodyLarge)
             Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        TextButton(onClick = onEdit) { Text(stringResource(R.string.usage_change)) }
+        TextButton(onClick = onEdit) { Text(action) }
     }
 }

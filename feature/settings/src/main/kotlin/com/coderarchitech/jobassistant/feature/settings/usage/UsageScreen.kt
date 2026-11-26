@@ -52,6 +52,7 @@ import java.time.format.FormatStyle
 fun UsageRoute(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenPrices: () -> Unit = {},
     viewModel: UsageViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -63,6 +64,7 @@ fun UsageRoute(
                 budgetText = viewModel::onBudgetText,
                 saveBudget = viewModel::saveBudget,
                 closeEditor = viewModel::closeEditor,
+                openPrices = onOpenPrices,
             ),
         onBack = onBack,
         modifier = modifier,
@@ -74,6 +76,7 @@ data class UsageActions(
     val budgetText: (String) -> Unit = {},
     val saveBudget: () -> Unit = {},
     val closeEditor: () -> Unit = {},
+    val openPrices: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -11,6 +11,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.coderarchitech.jobassistant.core.ui.JobAssistantTheme
 import com.coderarchitech.jobassistant.feature.home.HomeRoute
+import com.coderarchitech.jobassistant.feature.settings.prices.PricesRoute
 import com.coderarchitech.jobassistant.feature.settings.usage.UsageRoute
 import com.coderarchitech.jobassistant.feature.settings.watchlist.WatchlistRoute
 import dagger.hilt.android.AndroidEntryPoint
@@ -28,7 +29,8 @@ class MainActivity : ComponentActivity() {
             JobAssistantTheme {
                 var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
                 val home = { screen = Screen.HOME }
-                if (screen != Screen.HOME) BackHandler(onBack = home)
+                val usage = { screen = Screen.USAGE }
+                if (screen != Screen.HOME) BackHandler(onBack = if (screen == Screen.PRICES) usage else home)
                 when (screen) {
                     Screen.HOME ->
                         HomeRoute(onOpenWatchlist = { screen = Screen.WATCHLIST }, onOpenUsage = {
@@ -36,7 +38,8 @@ class MainActivity : ComponentActivity() {
                                 Screen.USAGE
                         })
                     Screen.WATCHLIST -> WatchlistRoute(onBack = home)
-                    Screen.USAGE -> UsageRoute(onBack = home)
+                    Screen.USAGE -> UsageRoute(onBack = home, onOpenPrices = { screen = Screen.PRICES })
+                    Screen.PRICES -> PricesRoute(onBack = usage)
                 }
             }
         }
@@ -44,4 +47,4 @@ class MainActivity : ComponentActivity() {
 }
 
 /** The screens Home can open until the navigation graph arrives (T1.17). */
-private enum class Screen { HOME, WATCHLIST, USAGE }
+private enum class Screen { HOME, WATCHLIST, USAGE, PRICES }
