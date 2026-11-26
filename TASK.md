@@ -204,7 +204,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ fixture tests pass, and the client never exceeds the documented rate.
   _Note:_ the documented rate is at most 4 requests a day and 2 a minute, and the client enforces it. `RemotiveCredit` and the 6-hour rule need the pipeline and Job detail: see T2.20 and T2.21.
 
-- [ ] **T2.07 Build the We Work Remotely RSS client** (P0) · Depends on T2.01
+- [x] **T2.07 Build the We Work Remotely RSS client** (P0) · Depends on T2.01 · [#35](https://github.com/coderArchitech/job-assistant/pull/35)
   XML pull parser over the category feeds.
   _Done when:_ fixture tests pass for at least two feeds.
 

@@ -1,5 +1,7 @@
 plugins {
     id("jobassistant.android.library")
+    // The RSS parser is Android's XmlPullParser; its tests run on Robolectric.
+    id("jobassistant.android.robolectric")
     alias(libs.plugins.kotlin.serialization)
 }
 
