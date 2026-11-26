@@ -520,6 +520,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ scheduled runs fire on time for 3 days on one Xiaomi and one Samsung device.
 
 - [ ] **T5.06 Write the privacy policy and disclosures** (P0)
+  _Progress:_ the policy is drafted in [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md) from the design's data flows. Still open: the owner fills in operator, contact and date and publishes it at a public URL (also needed for T4.01); the app links it in Settings; and the in-app prominent disclosures before portal credentials, AI data sharing and SMS consent (built with onboarding, T1.17).
   Privacy policy page; in-app prominent disclosures before collecting portal credentials and before AI data sharing.
   _Done when:_ the policy URL is live and linked in the app and Play listing.
 

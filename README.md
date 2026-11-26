@@ -173,5 +173,6 @@ See [CLAUDE.md](CLAUDE.md) for all commands and the checks every PR must pass.
 
 - [Product Requirements Document — Phase 1](docs/PRD.md): goals, user stories, functional and non-functional requirements, risks, acceptance criteria and open questions.
 - [Technical Design — Phase 1](docs/TECHNICAL_DESIGN.md): architecture, modules, pipeline and scheduling, data model, AI provider layer, job sources, portal automation, OTP, outreach, security, Android platform constraints, testing and delivery plan.
+- [Privacy policy (draft)](docs/PRIVACY_POLICY.md): what the app stores, what leaves the phone and to whom, and the user's choices; to be published at a public URL before release (task T5.06).
 - [Implementation tasks](TASK.md): every task needed to build Phase 1, grouped by milestone, with dependencies and done-when checks.
 - [CLAUDE.md](CLAUDE.md): rules and workflow for working in this repo with Claude Code, including the project agents (`.claude/agents/`) and skills (`.claude/skills/`).
