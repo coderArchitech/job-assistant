@@ -130,6 +130,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ a fake provider passes a contract test suite that both real providers will also run.
 
 - [ ] **T1.12 Implement the Anthropic provider** (P0) · Depends on T1.01, T1.10, T1.11
+  _Note from T3.09:_ List every model this provider offers, with its prices, in the bundled `core/config/src/main/assets/config/v1/prices.json` (and the host's table), or its calls are priced at `FallbackPricing.PRICE`.
   Official `anthropic-java` SDK (D01). Messages API with structured outputs (`output_config.format`) from a hand-written JSON Schema, never the class-derived overload; `GET /v1/models` for the key check and model list; prompt caching on the stable prefix; `stop_reason` handling, including `refusal`; no sampling parameters sent; usage (including cached tokens) mapped to `UsageRecord`.
   _Note from T1.11:_ Extend `LlmProviderContract` (`:ai` tests) and serve each `Scenario` from MockWebServer. Map `input_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens` straight into `TokenUsage`. Check whether structured outputs accept value keywords such as `minimum` and `maxLength`; the design keeps those limits in the Kotlin type.
   _Note from T1.10:_ Inject `@HttpClientFor(NetworkGroup.AI) OkHttpClient`. It already retries 429, 529 and 5xx and returns the last response, so map a final 429 or 529 to `RateLimited(retryAfter)` from its `Retry-After` header, a 401 or 403 to `InvalidKey`, and an `IOException` (including `BlockedRequestException`) to `NetworkError`. Do not add a second retry loop.
@@ -138,6 +139,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ the contract suite passes against recorded fixtures, and one live smoke test passes with a real key.
 
 - [ ] **T1.13 Implement the OpenAI provider** (P0) · Depends on T1.01, T1.10, T1.11
+  _Note from T3.09:_ List every model this provider offers, with its prices, in the bundled `core/config/src/main/assets/config/v1/prices.json` (and the host's table), or its calls are priced at `FallbackPricing.PRICE`.
   Thin client on OkHttp and kotlinx.serialization (D01). Structured Outputs with a strict JSON schema, `GET /v1/models` filtered by the remote allowlist, embeddings endpoint, and refusal and `finish_reason` handling.
   _Note from T1.11:_ Extend `LlmProviderContract` (`:ai` tests). OpenAI's `prompt_tokens` includes `cached_tokens`: set `TokenUsage.inputTokens` to the difference and `cacheReadInputTokens` to `cached_tokens`.
   _Note from T1.10:_ Inject `@HttpClientFor(NetworkGroup.AI) OkHttpClient` and the shared `Json`. Retries are already done by the client, so do not add a second loop; map the final status as in T1.12.
@@ -272,6 +274,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 ### Pipeline and screens
 
 - [ ] **T2.20 Build the background pipeline** (P0) · Depends on T2.01, T2.17, T1.05
+  _Note from T3.09:_ Refresh signed config at the start of each run (`ConfigPrices.refresh()` and each adapter's `ConfigClient.refresh`); the app only refreshes the price table at startup.
   _Note from T4.13:_ when the metered provider refuses a call with `BlockReason.BUDGET_EXCEEDED`, end the run as paused and say why; the usage meter already tells the user the budget is reached.
   `DiscoverWorker` and `ScoreWorker` (batches of 25 that re-enqueue), a unique periodic request per preset (`run:<presetId>`), a unique one-time chain per tick (`KEEP`), network, charging and battery constraints, "Run now" as expedited work, a `Run` record with per-stage counts, and the "new matches" notification.
   _Done when:_ a run of 200 jobs finishes in under 15 minutes on Wi-Fi and at least 70% of jobs are removed before the LLM.
@@ -332,6 +335,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ wiping one portal leaves another portal's session logged in.
 
 - [ ] **T3.09 Build the config host client** (P0) · Depends on T1.10, D07
+  _Progress:_ the client, signature checks, fallback and the signed price table are in [#47](https://github.com/coderArchitech/job-assistant/pull/47) (Done when verified there); the "Edit prices" screen follows in a second PR, which ticks this task.
   _Note from T4.13:_ the usage meter (`:feature:settings`, `usage`) has no price-table editor yet; add an "Edit prices" screen there for the user's edits that `PriceTable` reads, since T4.13 left it to this task.
   Fetch adapter bundles and the price table; verify Ed25519 signatures against the two public keys in the app (current and next, D07); fall back to the last good or bundled version; respect `minAppVersion`.
   _Note from T1.10:_ Use `@HttpClientFor(NetworkGroup.CONFIG)`. It reaches only the host in `BuildInfo.configHost`, so a blank host means every call fails with `BlockedRequestException`; treat that as "config host not set".
@@ -339,12 +343,14 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ a tampered bundle is rejected and the bundled version is used.
 
 - [ ] **T3.10 Set up the config host** (P0) · Depends on D07
+  _Note from T3.09:_ Publish each item as the design's "Config host client" describes: the document at `v1/prices.json` or `v1/adapters/<portal>.json`, its base64 Ed25519 signature at the same path plus `.sig`, and a header of `kind`, `name`, a rising `version` and `minAppVersion`. Put the two public keys (base64, raw 32 bytes, current then next) in `jobassistant.configKeys.<flavor>`. Consider a signed expiry so a frozen host is noticed.
   Static hosting for signed bundles and the price table; a signing script the owner runs offline with the private key (D07), never in CI; a release, rollback and key rotation procedure. No user identifiers in requests.
   _Done when:_ a bundle is published, rolled back, and the app follows both.
 
 ### Portal adapters
 
 - [ ] **T3.11 Build the adapter framework** (P0) · Depends on T3.07, T3.09
+  _Note from T3.09:_ Load bundles with `ConfigClient.current(ConfigItem.Adapter(name), isValidBody)` and refresh them with `refresh(...)`, passing a validator for the manifest, so a saved bundle this app cannot read never wins over the bundled one. Bundled adapters go in `assets/config/v1/adapters/`.
   _Note from T3.07:_ Drive pages through `JsBridge` (`:portals`, `web.bridge`): `attach` it before the first load, and after a step that navigates, call `awaitPage(newerThan = generation)` with the generation read before the step. `PageChanged` and `NoReply` mean the step's outcome is unknown; never retry a submit on them (rule 5). Adapter bundles are injected the same way, for the portal's origins only.
   _Note from T3.08:_ call `PortalSessions.attach(webView, portal)` on each `AgentWebView` before its first load, and build `PortalSessions` with every portal so a fallback wipe spares their domains.
   `ScriptedPortalAdapter` implementing `PortalAdapter` (`login`, `search`, `getDetails`, `apply`, `healthCheck`); the manifest format (version, selectors, flows, health-check steps, `minAppVersion`).

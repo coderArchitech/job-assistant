@@ -475,6 +475,15 @@ Built-in portals (Naukri, Instahyre, Greenhouse and Lever forms) are JS bundles 
 
 Bundles come from the static config host so selectors can be fixed without an app release. Each bundle is signed with Ed25519; the app verifies it against the two public keys compiled into the app (current and next) and falls back to the last good or bundled version if verification fails. The owner holds the private key offline and signs releases by hand; CI never holds it (D07). Google Play's rule against downloading executable code exempts JavaScript running in a WebView, which this design relies on; the Play policy review in the hardening milestone must confirm it.
 
+_Config host client_ (`:core:config`, `ConfigClient`, task T3.09).
+
+- **Format.** Each item is a JSON document at a path under the config host (`v1/prices.json`, `v1/adapters/<portal>.json`) with a detached Ed25519 signature over its exact bytes, base64, at the same path plus `.sig`. Every document starts with `kind`, `name`, `version` (from 1, rising with every release) and `minAppVersion` (an app `versionCode`). The host may have a path of its own; item paths are appended to it.
+- **Keys.** The public keys, current then next, are base64 of the raw 32-byte keys in `jobassistant.configKeys.<flavor>` (`gradle.properties`), comma-separated, and reach the app as `BuildInfo.configKeys`. Empty until the owner creates them; with no key every download is refused and only bundled config is used.
+- **Accepting a release.** A download is used only if a key verifies it, its `kind` and `name` are the item asked for (so one portal's bundle cannot stand in for another's), its body is valid for its kind, this app meets `minAppVersion`, and its version is above every version accepted before. That floor is kept apart from the saved copy, so losing the copy never lets an older signed release back in. Refreshes run one at a time.
+- **What is used.** The last good download, saved in app-private storage (signature and document in one file, synced and moved into place) and verified again on every read, or the copy bundled in the APK under `assets/config/`, whichever is newer and readable by this app. A tampered, rolled-back, unreadable or missing download leaves the config in use as it was.
+- **Prices.** `ConfigPrices` reads `v1/prices.json` (`models`: provider, model, and input, output, cache-read and cache-write prices in micro-US-dollars per million tokens; input and output above zero), and `ListedPriceTable` (`:ai`) prices AI calls from it; unlisted models fall back to over-counting. The app loads the table off the main thread at startup and asks the host for a newer one. The bundled table lists no models yet; the providers (T1.12, T1.13) add theirs.
+- **Limit.** A host that keeps serving the current release can hold back a newer one; nothing signed says how fresh a release must be.
+
 **Apply flow** (built-in adapters)
 
 1. Take a cap slot: a transactional counter per portal per day (see **Daily caps**); no slot, no session.
