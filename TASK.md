@@ -54,6 +54,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 - [x] **T0.06 Define build types and flavors** (P0) · Depends on T0.01 · [#41](https://github.com/coderArchitech/job-assistant/pull/41)
   `debug` and `release` build types; `dev` and `prod` flavors (dev points at a test config host). HTTP logging only in debug.
   _Done when:_ both flavors install side by side on one device.
+  _Note:_ `CONFIG_HOST` is set per flavor from `gradle.properties` and is empty until the config host exists; pointing dev at a test host is part of T3.10.
 
 - [ ] **T0.07 Set up release signing** (P0)
   Play App Signing enrolled; the upload key is kept outside the repo, in CI secrets.

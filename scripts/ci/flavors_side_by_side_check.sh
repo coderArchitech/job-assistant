@@ -3,7 +3,8 @@
 #
 # The dev flavor adds the `.dev` application ID suffix and its own launcher label ("Job Assistant Dev"),
 # so both can be installed and told apart. This installs both debug builds, checks both packages are
-# present at once, launches each, and checks each is still running, which shows neither replaced the other.
+# present at once, starts each and waits for its first screen, then checks both are still alive a few
+# seconds later, so a flavor that crashes on start fails the check.
 #
 # Usage: scripts/ci/flavors_side_by_side_check.sh
 #   Needs a connected emulator or device; with several attached, pick one with ANDROID_SERIAL.
@@ -12,41 +13,40 @@ set -euo pipefail
 
 readonly PROD="com.coderarchitech.jobassistant"
 readonly DEV="${PROD}.dev"
+readonly SETTLE_SECONDS=5
 
-# Read the whole output before matching: grep -q under pipefail can kill adb with SIGPIPE (see #32).
-installed() {
-  local packages
-  packages="$(adb shell pm list packages)"
-  grep -qx "package:$1" <<<"${packages//$'\r'/}"
+fail() {
+  echo "FAIL: $*" >&2
+  exit 1
 }
 
-running() {
-  local pid
-  pid="$(adb shell pidof "$1" || true)"
-  [[ -n "${pid//[[:space:]]/}" ]]
+# adb's stdin is closed so it never reads the caller's; output is read whole before matching, because
+# grep -q under pipefail can kill adb with SIGPIPE (#32).
+on_device() { adb shell "$@" </dev/null | tr -d '\r'; }
+
+installed() { grep -qx "package:$1" <<<"$(on_device pm list packages)"; }
+
+alive() { [[ -n "$(on_device pidof "$1" || true)" ]]; }
+
+start() {
+  local activity output
+  activity="$(on_device cmd package resolve-activity --brief -c android.intent.category.LAUNCHER "$1" | tail -n 1)"
+  [[ "$activity" == */* ]] || fail "no launcher activity for $1 (got: $activity)"
+  output="$(on_device am start -W -n "$activity")" || fail "could not start $activity: $output"
+  grep -q "Status: ok" <<<"$output" || fail "$activity did not start: $output"
 }
 
 ./gradlew --quiet installDevDebug installProdDebug
 
 for pkg in "$PROD" "$DEV"; do
-  if ! installed "$pkg"; then
-    echo "FAIL: $pkg is not installed after installing both flavors" >&2
-    exit 1
-  fi
+  installed "$pkg" || fail "$pkg is not installed after installing both flavors"
 done
 echo "OK: both $PROD and $DEV are installed"
 
+start "$PROD"
+start "$DEV"
+sleep "$SETTLE_SECONDS"
 for pkg in "$PROD" "$DEV"; do
-  adb shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 >/dev/null
+  alive "$pkg" || fail "$pkg stopped after starting; it may have crashed (see logcat)"
 done
-
-# Give both a moment to start, then check both are alive at the same time.
-for _ in $(seq 1 20); do
-  if running "$PROD" && running "$DEV"; then
-    echo "OK: both flavors are running side by side"
-    exit 0
-  fi
-  sleep 1
-done
-echo "FAIL: both flavors did not run at the same time" >&2
-exit 1
+echo "OK: both flavors started and are running side by side"
