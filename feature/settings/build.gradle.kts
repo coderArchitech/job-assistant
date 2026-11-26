@@ -11,6 +11,10 @@ android {
 
 dependencies {
     implementation(libs.compose.material.icons.core)
+    // The signed price table, for the price editor (T3.09).
+    implementation(projects.core.config)
+    // FallbackPricing, which the empty price list explains.
+    implementation(projects.ai)
 
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.roborazzi)

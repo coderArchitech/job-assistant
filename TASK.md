@@ -334,8 +334,8 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   One WebView profile per portal through `ProfileStore`, with a shared `CookieManager` fallback where multi-profile is unsupported; per-portal wipe.
   _Done when:_ wiping one portal leaves another portal's session logged in.
 
-- [ ] **T3.09 Build the config host client** (P0) · Depends on T1.10, D07
-  _Progress:_ the client, signature checks, fallback and the signed price table are in [#47](https://github.com/coderArchitech/job-assistant/pull/47) (Done when verified there); the "Edit prices" screen follows in a second PR, which ticks this task.
+- [x] **T3.09 Build the config host client** (P0) · Depends on T1.10, D07 · [#47](https://github.com/coderArchitech/job-assistant/pull/47), [#48](https://github.com/coderArchitech/job-assistant/pull/48)
+  _Done in two PRs:_ the client, signature checks, fallback and the signed price table in #47 (Done when verified there); the "Model prices" editor in #48.
   _Note from T4.13:_ the usage meter (`:feature:settings`, `usage`) has no price-table editor yet; add an "Edit prices" screen there for the user's edits that `PriceTable` reads, since T4.13 left it to this task.
   Fetch adapter bundles and the price table; verify Ed25519 signatures against the two public keys in the app (current and next, D07); fall back to the last good or bundled version; respect `minAppVersion`.
   _Note from T1.10:_ Use `@HttpClientFor(NetworkGroup.CONFIG)`. It reaches only the host in `BuildInfo.configHost`, so a blank host means every call fails with `BlockedRequestException`; treat that as "config host not set".

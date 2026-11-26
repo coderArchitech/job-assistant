@@ -21,4 +21,11 @@ data class ListedPrice(
                 cacheWriteMicrosPerMillion >= 0,
         ) { "Prices cannot be negative" }
     }
+
+    /** True when [other] prices the same model. */
+    fun isSameModel(other: ListedPrice): Boolean = provider == other.provider && model == other.model
 }
+
+/** The signed prices with the user's [edits] in place of the entries they cover, edits first. */
+fun List<ListedPrice>.withEdits(edits: List<ListedPrice>): List<ListedPrice> =
+    edits + filterNot { listed -> edits.any(listed::isSameModel) }

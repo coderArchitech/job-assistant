@@ -16,10 +16,30 @@ data class AppSettings(
     val budget: Budget = Budget(),
     val ai: AiSettings = AiSettings(),
     val toggles: FeatureToggles = FeatureToggles(),
+    /**
+     * The user's own model prices (task T3.09), which win over the signed price table: one per provider and
+     * model, input and output above zero, at most [MAX_PRICE_EDITS].
+     */
+    val priceEdits: List<ListedPrice> = emptyList(),
 ) {
+    init {
+        require(priceEdits.all(::isValidPriceEdit)) { "An edited price names a model id and costs something" }
+        require(priceEdits.distinctBy { it.provider to it.model }.size == priceEdits.size) { "One edit per model" }
+        require(priceEdits.size <= MAX_PRICE_EDITS) { "At most $MAX_PRICE_EDITS edited prices" }
+    }
+
     companion object {
         /** PRD FR11: the daily report is ready at 9:00 PM by default. */
         val DEFAULT_REPORT_TIME: LocalTime = LocalTime.of(21, 0)
+
+        /** More edits than any user needs; keeps the settings file small. */
+        const val MAX_PRICE_EDITS = 50
+
+        /** True for an edit the settings accept: a model id, and input and output above zero. */
+        fun isValidPriceEdit(price: ListedPrice): Boolean =
+            AiSettings.isValidModelId(price.model) &&
+                price.inputMicrosPerMillion > 0 &&
+                price.outputMicrosPerMillion > 0
     }
 }
 
