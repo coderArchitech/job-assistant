@@ -39,7 +39,6 @@ room {
     schemaDirectory("$projectDir/schemas")
 }
 
-
 // Settings are stored as protobuf lite messages generated from src/main/proto.
 protobuf {
     protoc {

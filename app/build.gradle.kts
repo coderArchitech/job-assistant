@@ -117,7 +117,6 @@ dependencies {
     androidTestImplementation(libs.compose.ui.test.junit4)
 }
 
-
 tasks.register("unitTest") {
     group = "verification"
     description = "Runs JVM unit tests for the dev debug variant."
