@@ -401,6 +401,13 @@ A source that can filter by date uses the cursor; one that cannot returns everyt
 2. Same canonical URL (lowercased host, tracking parameters and trailing slash removed) → same job.
 3. Same `dedupeHash` = SHA-256 of normalized company and normalized title → merged. The ATS copy (Greenhouse, Lever, Ashby) is kept as primary because it has the cleanest apply path; other sources are stored as aliases.
 
+**Deduplicator implementation** (`:sources`, package `dedupe`, task T2.11).
+
+- `DedupeKeys.canonicalUrl`: `https`, the host in lower case without `www.`, `utm_*` and known click and ATS tracking parameters (`gclid`, `fbclid`, `gh_src`, `lever-source` and others) removed, other parameters sorted, the trailing slash removed, and the fragment dropped unless it routes the page (`#/jobs/123`). Generic names such as `ref`, `source` or `gh_jid` are kept, because a company's careers page may use them to name the job.
+- `DedupeKeys.dedupeHash`: SHA-256 of `CompanyNames.key` and the title key: lower case, punctuation removed but `+` and `#` kept (so C++, C# and C differ), `Sr.` as senior and `Jr.` as junior, and a work-mode tag dropped only when it is the whole bracket (`(Remote)`, not `(Remote - EU)`) or the last word after a spaced dash or comma.
+- `Deduplicator.collapse` groups one run's postings: the same source and id keeps its last copy; the URL and hash rules join postings through any chain of matches. The primary is an ATS copy, else the earliest posted.
+- `Deduplicator.decide` compares a posting with the stored jobs its keys find and returns `New`, `Update`, `Alias` or `NewPrimary` (an ATS copy taking over from a job-board primary). Applying it is the pipeline's job (T2.20).
+
 **Context-aware search.** Once per preset per day, a small model call expands the free-form context into include and exclude keywords for sources that accept a query. The result is cached on the context hash, so editing the context refreshes it.
 
 ## Matching and scoring

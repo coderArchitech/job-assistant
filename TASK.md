@@ -225,7 +225,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Note from T2.02:_ `RawPosting.description` from Greenhouse is HTML with the entity escaping already removed, and `postedAt` is the first-published date. The live check for a board is `JOBASSISTANT_LIVE=1 ./gradlew :sources:testDebugUnitTest --tests '*GreenhouseLiveTest'`.
   _Done when:_ a table-driven test of at least 50 real postings passes.
 
-- [ ] **T2.11 Build the deduplicator** (P0) · Depends on T2.10
+- [x] **T2.11 Build the deduplicator** (P0) · Depends on T2.10 · [#37](https://github.com/coderArchitech/job-assistant/pull/37)
   _Note from T2.10:_ `JobNormalizer.normalize(raw, sourceKey)` gives a `NormalizedPosting` with `companyKey` (`CompanyNames.key`, the normalized company for `dedupeHash`) but no canonical URL or hash; those are this task's.
   Three steps: same source and external ID; same canonical URL; same `dedupeHash` of company and title. Keep the ATS copy as primary and store the others as aliases.
   _Done when:_ a fixture set with known cross-source duplicates collapses to the expected count.
@@ -269,6 +269,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 - [ ] **T2.20 Build the background pipeline** (P0) · Depends on T2.01, T2.17, T1.05
   `DiscoverWorker` and `ScoreWorker` (batches of 25 that re-enqueue), a unique periodic request per preset (`run:<presetId>`), a unique one-time chain per tick (`KEEP`), network, charging and battery constraints, "Run now" as expedited work, a `Run` record with per-stage counts, and the "new matches" notification.
   _Done when:_ a run of 200 jobs finishes in under 15 minutes on Wi-Fi and at least 70% of jobs are removed before the LLM.
+  _Note from T2.11:_ for each `NormalizedPosting`, look up the stored jobs by (source, externalId), canonical URL and `dedupeHash` (`JobDao` has all three), build `StoredMatches` and apply `Deduplicator.decide`: `New` inserts, `Update` refreshes the row, `Alias` inserts with `aliasOfJobId`, `NewPrimary` inserts and repoints the old primary and its aliases. `JobDao` has no update queries yet (by design, status changes go through `JobRepository`), so add narrow ones for refreshing a posting and repointing aliases. Within one run, `Deduplicator.collapse` first.
   _Note:_ fetch each source once per run and filter the one result for each preset: `RemotiveSource` refuses a second fetch inside 6 hours with `SourceThrottledException`, which is a skip, not a failure to show the user.
 
 - [ ] **T2.21 Build the Jobs screen** (P0) · Depends on T2.17, T1.17
