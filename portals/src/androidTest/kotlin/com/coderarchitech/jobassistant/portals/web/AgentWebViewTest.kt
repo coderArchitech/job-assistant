@@ -86,7 +86,7 @@ class AgentWebViewTest {
     fun linkedInIsBlocked() {
         run("document.getElementById('linkedin').click()")
 
-        assertEquals("https://www.linkedin.com/in/someone" to NavigationDecision.BLOCK, nextStop())
+        assertEquals(LINKEDIN_PROFILE to NavigationDecision.BLOCK, nextStop())
         assertStillOnTheStartPage()
     }
 
@@ -115,7 +115,7 @@ class AgentWebViewTest {
 
         onMain {
             try {
-                webView.addJavascriptInterface(Any(), "bridge")
+                webView.addJavascriptInterface(Any(), "bridge") // ci-allow: js-interface (test)
                 fail("addJavascriptInterface must throw")
             } catch (expected: UnsupportedOperationException) {
                 // As the design requires.
@@ -161,5 +161,6 @@ class AgentWebViewTest {
         const val START = "https://$ASSET_HOST/assets/runtime/start.html"
         const val TIMEOUT_S = 10L
         const val SETTLE_MS = 1_000L
+        const val LINKEDIN_PROFILE = "https://www.linkedin.com/in/someone" // ci-allow: linkedin-host (test)
     }
 }

@@ -29,8 +29,15 @@ class NavigationPolicyTest {
                 "https://evilnaukri.com/" to OPEN_OUTSIDE,
                 "https://acme.wd5.myworkdayjobs.com/en-US/careers/job/1" to OPEN_OUTSIDE,
                 "https://user:pass@www.naukri.com/" to OPEN_OUTSIDE,
-                "https://www.linkedin.com/in/someone" to BLOCK,
-                "https://LINKEDIN.COM/jobs" to BLOCK,
+                "https://www.linkedin.com/in/someone" to BLOCK, // ci-allow: linkedin-host (test)
+                "https://LINKEDIN.COM/jobs" to BLOCK, // ci-allow: linkedin-host (test)
+                // Characters java.net.URI refuses but Chromium hands over unescaped.
+                "https://www.linkedin.com/px?a={x}|y" to BLOCK, // ci-allow: linkedin-host (test)
+                "https://a_b.linkedin.com/t.js" to BLOCK, // ci-allow: linkedin-host (test)
+                "https://www.naukri.com/jobs?filters=a|b&q={android}" to ALLOW,
+                "https://my_team.naukri.com/" to ALLOW,
+                "https://naukri.com@evil.example/" to OPEN_OUTSIDE,
+                "https://www.naukri.com:443/x" to ALLOW,
                 "https://lnkd.in/abc" to BLOCK,
                 "https://media.licdn.com/x.png" to BLOCK,
                 "file:///data/data/com.coderarchitech.jobassistant/files/vault" to BLOCK,
@@ -46,7 +53,7 @@ class NavigationPolicyTest {
 
     @Test
     fun linkedInCanNeverBeAllowed() {
-        for (host in listOf("linkedin.com", "www.linkedin.com", "*.linkedin.com")) {
+        for (host in listOf("linkedin.com", "www.linkedin.com", "*.linkedin.com")) { // ci-allow: linkedin-host (test)
             try {
                 NavigationPolicy(setOf(host))
                 fail("$host should be refused")
@@ -58,7 +65,8 @@ class NavigationPolicyTest {
 
     @Test
     fun subResourcesFromLinkedInAreBlocked() {
-        assertTrue(naukri.isBlockedHost("https://platform.linkedin.com/in.js"))
+        assertTrue(naukri.isBlockedHost("https://platform.linkedin.com/in.js")) // ci-allow: linkedin-host (test)
+        assertTrue(naukri.isBlockedHost("https://x_y.linkedin.com/a?b={c}")) // ci-allow: linkedin-host (test)
         assertFalse(naukri.isBlockedHost("https://static.naukri.com/app.js"))
         assertFalse(naukri.isBlockedHost("not a url"))
     }

@@ -1,7 +1,5 @@
 package com.coderarchitech.jobassistant.portals.web
 
-import java.net.URI
-import java.net.URISyntaxException
 import java.util.Locale
 
 /** What the runtime does with a navigation. */
@@ -21,6 +19,10 @@ enum class NavigationDecision {
  * sign-in and ATS hosts, over HTTPS only. LinkedIn is always blocked, whatever a portal lists, because the
  * app never automates it (CLAUDE.md rule 7). Pure, so it is tested on the JVM and shared by every check
  * point in [AgentWebView].
+ *
+ * URLs are read the way a browser hands them over, not with `java.net.URI`, which rejects characters such
+ * as `|` or `{` that Chromium leaves in a query and underscores in a host: a URL that strict parser refused
+ * would otherwise escape the LinkedIn check or block a real portal page.
  *
  * @param portalHosts the portal's hosts, such as `naukri.com`; each also allows its subdomains.
  */
@@ -42,41 +44,51 @@ class NavigationPolicy(
 
     /** The decision for a navigation to [url]. */
     fun decide(url: String): NavigationDecision {
-        val uri = parse(url) ?: return NavigationDecision.BLOCK
-        val scheme = uri.scheme?.lowercase(Locale.ROOT)
-        val host = uri.host?.lowercase(Locale.ROOT)?.trimEnd('.')
+        val text = url.trim()
+        val scheme =
+            SCHEME
+                .find(text)
+                ?.groupValues
+                ?.get(1)
+                ?.lowercase(Locale.ROOT)
+        val authority = AUTHORITY.find(text)?.groupValues?.get(1)
+        val host = authority?.let(::hostOf)
         return when {
-            url.trim() == ABOUT_BLANK -> NavigationDecision.ALLOW
+            text == ABOUT_BLANK -> NavigationDecision.ALLOW
             scheme != "https" && scheme != "http" -> NavigationDecision.BLOCK
             host.isNullOrEmpty() || isLinkedIn(host) -> NavigationDecision.BLOCK
-            // Mixed content and cleartext are refused: an http page of an allowed host is not loaded either.
-            scheme == "https" && isAllowed(host) && uri.userInfo == null -> NavigationDecision.ALLOW
+            // Cleartext is refused: an http page of an allowed host is not loaded either. A user name or
+            // password in the URL (`https://naukri.com@evil.example`) is a classic disguise, so it is never allowed.
+            scheme == "https" && '@' !in authority && isAllowed(host) -> NavigationDecision.ALLOW
             else -> NavigationDecision.OPEN_OUTSIDE
         }
     }
 
     /** True for any request (page or sub-resource) the runtime must refuse to fetch at all. */
-    fun isBlockedHost(url: String): Boolean {
-        val host = parse(url)?.host?.lowercase(Locale.ROOT)?.trimEnd('.')
-        return host != null && isLinkedIn(host)
-    }
-
-    /** The URI, or null when [url] is not one; such text is never loaded. */
-    @Suppress("SwallowedException")
-    private fun parse(url: String): URI? =
-        try {
-            URI(url.trim())
-        } catch (e: URISyntaxException) {
-            null
-        }
+    fun isBlockedHost(url: String): Boolean =
+        AUTHORITY
+            .find(url.trim())
+            ?.groupValues
+            ?.get(1)
+            ?.let(::hostOf)
+            ?.let(::isLinkedIn) == true
 
     private fun isAllowed(host: String): Boolean = allowed.any { host == it || host.endsWith(".$it") }
 
     companion object {
         const val ABOUT_BLANK = "about:blank"
 
+        private val SCHEME = Regex("^([a-zA-Z][a-zA-Z0-9+.-]*):")
+        private val AUTHORITY = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://([^/?#\\\\]*)")
+
         /** Hosts LinkedIn serves pages and tracking from. */
-        private val LINKEDIN = listOf("linkedin.com", "lnkd.in", "licdn.com", "linkedin.cn")
+        private val LINKEDIN =
+            listOf(
+                "linkedin.com", // ci-allow: linkedin-host (blocklist)
+                "lnkd.in",
+                "licdn.com",
+                "linkedin.cn",
+            )
 
         /**
          * Sign-in pages portals send users to, and the ATS forms a portal's "apply" can land on. Workday and
@@ -96,5 +108,13 @@ class NavigationPolicy(
 
         /** True for a LinkedIn host or any subdomain of one. */
         fun isLinkedIn(host: String): Boolean = LINKEDIN.any { host == it || host.endsWith(".$it") }
+
+        /** The host of an authority (`user@host:443` gives `host`), lower case, without a trailing dot. */
+        private fun hostOf(authority: String): String =
+            authority
+                .substringAfterLast('@')
+                .let { if (it.startsWith("[")) it.substringBefore(']') + "]" else it.substringBefore(':') }
+                .lowercase(Locale.ROOT)
+                .trimEnd('.')
     }
 }
