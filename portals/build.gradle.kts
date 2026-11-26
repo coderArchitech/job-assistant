@@ -7,6 +7,8 @@ dependencies {
     implementation(projects.core.security)
     implementation(projects.core.config)
 
-    // The runtime test serves its pages from the test APK through WebViewAssetLoader.
-    androidTestImplementation(libs.androidx.webkit)
+    // Per-portal WebView profiles (ProfileStore), and WebViewAssetLoader in the runtime test.
+    implementation(libs.androidx.webkit)
+    implementation(libs.kotlinx.coroutines.core)
+    androidTestImplementation(libs.kotlinx.coroutines.android)
 }
