@@ -11,102 +11,111 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
 /**
- * Keeps each portal's sign-in apart (design, WebView runtime; task T3.08). Where the WebView supports it, every
- * portal gets its own profile from `ProfileStore`, with its own cookies and storage, so wiping one portal deletes
- * its profile and nothing else. Older WebViews have one shared cookie jar; there a wipe expires only the cookies
- * and site storage of the portal's own hosts, so other portals stay signed in.
+ * Keeps each portal's sign-in apart (design, WebView runtime; task T3.08).
+ *
+ * Where the WebView supports it, every portal gets its own profile from `ProfileStore`, with its own cookies,
+ * storage and cache, so wiping one portal deletes its profile and touches nothing else. This is the real
+ * isolation.
+ *
+ * Older WebViews have one cookie jar for the whole app. There a wipe expires the cookies sent to the portal's own
+ * hosts (on each host and on its parent domains, except a parent another portal also uses) and deletes their
+ * site storage. A shared jar cannot be wiped per site completely: a cookie on another path, a session on a
+ * sign-in provider's host, and the HTTP cache are not reachable per site, so those survive the fallback's wipe.
  *
  * Use it on the main thread, like WebView itself.
  *
+ * @param portals every portal the app knows, so a wipe on the shared jar spares domains another portal uses.
  * @param multiProfile whether to use profiles; null asks the WebView. Tests force the shared-jar path with false.
  */
 class PortalSessions(
+    private val portals: List<PortalSession>,
     multiProfile: Boolean? = null,
 ) {
     /** True when each portal has its own profile; false on the shared-jar fallback. */
     val isolated: Boolean = multiProfile ?: WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)
 
     /**
-     * Puts [webView] in [portal]'s profile. Call it before the view loads anything; a WebView cannot change
-     * profile after its first load. On the fallback there is nothing to do: every view shares the jar.
+     * Puts [webView] in [portal]'s profile, creating it if needed. Call it before the view loads anything; a
+     * WebView cannot change profile after its first load. On the fallback every view shares the jar.
      */
     @SuppressLint("RequiresFeature") // Checked once in isolated.
     fun attach(
         webView: WebView,
         portal: PortalSession,
     ) {
-        if (isolated) {
-            ProfileStore.getInstance().getOrCreateProfile(portal.profileName)
-            WebViewCompat.setProfile(webView, portal.profileName)
-        }
+        if (isolated) WebViewCompat.setProfile(webView, portal.profileName)
     }
 
-    /** The cookie jar [portal]'s pages use. */
+    /** The cookie jar [portal]'s pages use, or null when its profile does not exist (never signed in, or wiped). */
     @SuppressLint("RequiresFeature")
-    fun cookiesOf(portal: PortalSession): CookieManager =
+    fun cookiesOf(portal: PortalSession): CookieManager? =
         if (isolated) {
             ProfileStore
                 .getInstance()
-                .getOrCreateProfile(
+                .getProfile(
                     portal.profileName,
-                ).cookieManager
+                )?.cookieManager
         } else {
             CookieManager.getInstance()
         }
 
-    /**
-     * Signs [portal] out by removing everything it stored: with profiles, its whole profile (no WebView may still be
-     * using it); on the fallback, the cookies and site storage of each of its hosts. Other portals are untouched.
-     */
+    /** Signs [portal] out by removing what it stored, leaving every other portal signed in. */
+    suspend fun wipe(portal: PortalSession) = if (isolated) wipeProfile(portal) else wipeSharedJar(portal)
+
     @SuppressLint("RequiresFeature")
-    suspend fun wipe(portal: PortalSession) {
-        if (isolated) {
-            val store = ProfileStore.getInstance()
-            if (store.getProfile(portal.profileName) != null && !store.deleteProfile(portal.profileName)) {
-                // The profile is still in use: clear it in place, so the wipe never silently fails.
-                val profile = store.getOrCreateProfile(portal.profileName)
-                profile.cookieManager.removeAll()
-                profile.webStorage.deleteAllData()
+    @Suppress("SwallowedException") // An in-use profile is emptied instead, which is the point of catching it.
+    private suspend fun wipeProfile(portal: PortalSession) {
+        val store = ProfileStore.getInstance()
+        val profile = store.getProfile(portal.profileName) ?: return
+        val deleted =
+            try {
+                store.deleteProfile(portal.profileName)
+            } catch (inUse: IllegalStateException) {
+                false
             }
-        } else {
-            val cookies = CookieManager.getInstance()
-            portal.origins.forEach { origin ->
-                expireCookies(cookies, origin)
-                WebStorage.getInstance().deleteOrigin(origin)
-            }
-            cookies.flush()
+        if (!deleted) {
+            profile.cookieManager.removeAll()
+            profile.cookieManager.flush()
+            profile.webStorage.deleteAllData()
         }
     }
 
-    /**
-     * Expires every cookie the shared jar sends to [origin]. `CookieManager` has no per-site delete, so each cookie
-     * is set again already expired, on the host and on its parent domain, where a site may have scoped it.
-     */
-    private fun expireCookies(
+    private fun wipeSharedJar(portal: PortalSession) {
+        val cookies = CookieManager.getInstance()
+        val shared = portals.filter { it.id != portal.id }.flatMap { other -> other.hosts.flatMap(::parentsOf) }.toSet()
+        portal.origins.zip(portal.hosts).forEach { (origin, host) ->
+            val names =
+                cookies
+                    .getCookie(origin)
+                    .orEmpty()
+                    .split(';')
+                    .mapNotNull { pair -> pair.substringBefore('=').trim().takeIf { it.isNotEmpty() } }
+                    .toSet()
+            val domains = listOf(host) + parentsOf(host).filter { it !in shared }
+            for (name in names) expire(cookies, origin, name, domains)
+            WebStorage.getInstance().deleteOrigin(origin)
+        }
+        cookies.flush()
+    }
+
+    /** Always Secure, so `__Secure-` and `__Host-` cookies are replaced too; `__Host-` ones never take a Domain. */
+    private fun expire(
         cookies: CookieManager,
         origin: String,
+        name: String,
+        domains: List<String>,
     ) {
-        val names =
-            cookies
-                .getCookie(origin)
-                .orEmpty()
-                .split(';')
-                .mapNotNull { pair -> pair.substringBefore('=').trim().takeIf { it.isNotEmpty() } }
-                .toSet()
-        val host = origin.substringAfter("://").substringBefore('/')
-        for (name in names) {
-            cookies.setCookie(origin, "$name=; Max-Age=0; Path=/")
-            cookies.setCookie(origin, "$name=; Max-Age=0; Path=/; Domain=$host")
-            parentDomain(host)?.let { cookies.setCookie(origin, "$name=; Max-Age=0; Path=/; Domain=.$it") }
+        cookies.setCookie(origin, "$name=; Max-Age=0; Path=/; Secure")
+        if (!name.startsWith(HOST_PREFIX)) {
+            domains.forEach { cookies.setCookie(origin, "$name=; Max-Age=0; Path=/; Secure; Domain=$it") }
         }
     }
 
-    private fun parentDomain(host: String): String? =
-        host
-            .split('.')
-            .takeIf { it.size > 2 }
-            ?.drop(1)
-            ?.joinToString(".")
+    /** `login.jobs.example.com` gives `jobs.example.com` and `example.com`, never a bare top-level domain. */
+    private fun parentsOf(host: String): List<String> {
+        val labels = host.split('.')
+        return (1..labels.size - MIN_LABELS).map { labels.drop(it).joinToString(".") }
+    }
 
     private suspend fun CookieManager.removeAll() =
         suspendCancellableCoroutine { done ->
@@ -114,11 +123,17 @@ class PortalSessions(
                 done.resume(Unit)
             }
         }
+
+    private companion object {
+        const val HOST_PREFIX = "__Host-"
+        const val MIN_LABELS = 2
+    }
 }
 
 /**
  * A portal as far as its session is concerned: a stable [id] for its profile and the [origins] it signs in on,
- * such as `https://www.naukri.com` and `https://login.naukri.com`.
+ * such as `https://www.naukri.com` and `https://login.naukri.com`, written canonically: lower case, HTTPS, no
+ * port or path.
  */
 data class PortalSession(
     val id: String,
@@ -126,13 +141,19 @@ data class PortalSession(
 ) {
     init {
         require(ID.matches(id)) { "A portal id is lower-case letters, digits and '-'" }
-        require(origins.all { it.startsWith("https://") }) { "Portal origins are HTTPS" }
+        require(
+            origins.isNotEmpty() && origins.all { ORIGIN.matches(it) },
+        ) { "Origins are https://host, lower case, no port" }
     }
 
     /** The WebView profile name, one per portal. */
     val profileName: String get() = "portal-$id"
 
+    /** The hosts of [origins]. */
+    val hosts: List<String> get() = origins.map { it.removePrefix("https://") }
+
     private companion object {
         val ID = Regex("[a-z0-9][a-z0-9-]{0,40}")
+        val ORIGIN = Regex("https://[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+")
     }
 }
