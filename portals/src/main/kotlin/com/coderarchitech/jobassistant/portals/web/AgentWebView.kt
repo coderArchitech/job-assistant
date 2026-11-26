@@ -67,6 +67,9 @@ class AgentWebView(
 
     private val main = Handler(Looper.getMainLooper())
 
+    /** Told, on the main thread, of every page that starts loading, blocked ones and `about:blank` included. */
+    internal var onPageStartedForBridge: ((url: String) -> Unit)? = null
+
     /** The last navigation reported, so the several check points one navigation passes report it once. */
     @Volatile private var lastStopped: String? = null
 
@@ -201,6 +204,7 @@ class AgentWebView(
             url: String,
             favicon: Bitmap?,
         ) {
+            onPageStartedForBridge?.invoke(url)
             val decision = policy.decide(url)
             if (decision != NavigationDecision.ALLOW) {
                 view.stopLoading()
