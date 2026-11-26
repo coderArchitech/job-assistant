@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="watchlist_title">Company watchlist</string>
+    <string name="watchlist_back">Back</string>
+    <string name="watchlist_add">Add company</string>
+    <string name="watchlist_intro">Each run checks these companies\' own job boards for new openings.</string>
+    <string name="watchlist_empty_title">No companies yet</string>
+    <string name="watchlist_empty_body">Add companies that hire through Greenhouse, Lever or Ashby. The app reads their public job boards on every run, so openings show up even before job sites list them.</string>
+    <string name="watchlist_board_summary">%1$s · %2$s</string>
+    <string name="watchlist_paused">Paused</string>
+    <string name="watchlist_more">More options for %1$s</string>
+    <string name="watchlist_edit">Edit</string>
+    <string name="watchlist_check">Check board</string>
+    <string name="watchlist_pause">Pause</string>
+    <string name="watchlist_resume">Resume</string>
+    <string name="watchlist_remove">Remove</string>
+    <string name="watchlist_removed">Removed %1$s</string>
+    <string name="watchlist_saved">Saved %1$s</string>
+    <string name="watchlist_undo">Undo</string>
+    <string name="watchlist_status_not_checked">Not checked</string>
+    <string name="watchlist_status_checking">Checking…</string>
+    <plurals name="watchlist_status_found">
+        <item quantity="one">%1$d open role</item>
+        <item quantity="other">%1$d open roles</item>
+    </plurals>
+    <string name="watchlist_status_not_found">Board not found</string>
+    <string name="watchlist_status_failed">Couldn\'t check</string>
+
+    <string name="editor_add_title">Add company</string>
+    <string name="editor_edit_title">Edit company</string>
+    <string name="editor_name">Company name</string>
+    <string name="editor_name_missing">Enter the company\'s name</string>
+    <string name="editor_ats">Applicant tracking system</string>
+    <string name="editor_board">Board name</string>
+    <string name="editor_board_hint">The last part of the careers link, as in boards.greenhouse.io/stripe</string>
+    <string name="editor_board_invalid_plain">Use letters, digits, dashes or underscores</string>
+    <string name="editor_board_invalid_dotted">Use letters, digits, dots, dashes or underscores</string>
+    <string name="editor_duplicate">This board is already on your watchlist</string>
+    <string name="editor_check">Check board</string>
+    <string name="editor_cancel">Cancel</string>
+    <string name="editor_save">Save</string>
+    <string name="editor_found_detail">The board answered. Runs will pick up its openings.</string>
+    <string name="editor_not_found_detail">That board doesn\'t exist. Check the name in the careers link.</string>
+
+    <string name="ats_greenhouse">Greenhouse</string>
+    <string name="ats_lever">Lever</string>
+    <string name="ats_ashby">Ashby</string>
+</resources>
