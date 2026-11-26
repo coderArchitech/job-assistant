@@ -6,14 +6,8 @@ import androidx.datastore.dataStoreFile
 import com.coderarchitech.jobassistant.core.data.repository.ApplicationRepository
 import com.coderarchitech.jobassistant.core.data.repository.JobRepository
 import com.coderarchitech.jobassistant.core.data.repository.RoomApplicationRepository
-import com.coderarchitech.jobassistant.core.data.repository.RoomCapSlots
-import com.coderarchitech.jobassistant.core.data.repository.RoomDecisionLog
 import com.coderarchitech.jobassistant.core.data.repository.RoomJobRepository
-import com.coderarchitech.jobassistant.core.data.repository.RoomKnownPostings
-import com.coderarchitech.jobassistant.core.data.repository.RoomSourceCursorStore
 import com.coderarchitech.jobassistant.core.data.repository.RoomTransactionRunner
-import com.coderarchitech.jobassistant.core.data.repository.RoomUsageLedger
-import com.coderarchitech.jobassistant.core.data.repository.SettingsBudgetSource
 import com.coderarchitech.jobassistant.core.data.repository.TransactionRunner
 import com.coderarchitech.jobassistant.core.data.settings.AUTO_SEND_CONSENT_FILE_NAME
 import com.coderarchitech.jobassistant.core.data.settings.AutoSendConsentMarker
@@ -22,13 +16,7 @@ import com.coderarchitech.jobassistant.core.data.settings.SETTINGS_FILE_NAME
 import com.coderarchitech.jobassistant.core.data.settings.SettingsRepository
 import com.coderarchitech.jobassistant.core.data.settings.createSettingsDataStore
 import com.coderarchitech.jobassistant.core.data.settings.proto.SettingsProto
-import com.coderarchitech.jobassistant.core.model.BudgetSource
-import com.coderarchitech.jobassistant.core.model.CapSlots
-import com.coderarchitech.jobassistant.core.model.DecisionLog
 import com.coderarchitech.jobassistant.core.model.IoDispatcher
-import com.coderarchitech.jobassistant.core.model.KnownPostings
-import com.coderarchitech.jobassistant.core.model.SourceCursorStore
-import com.coderarchitech.jobassistant.core.model.UsageLedger
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -62,24 +50,6 @@ internal abstract class DataModule {
 
     @Binds
     abstract fun bindTransactionRunner(impl: RoomTransactionRunner): TransactionRunner
-
-    @Binds
-    abstract fun bindUsageLedger(impl: RoomUsageLedger): UsageLedger
-
-    @Binds
-    abstract fun bindCapSlots(impl: RoomCapSlots): CapSlots
-
-    @Binds
-    abstract fun bindSourceCursorStore(impl: RoomSourceCursorStore): SourceCursorStore
-
-    @Binds
-    abstract fun bindKnownPostings(impl: RoomKnownPostings): KnownPostings
-
-    @Binds
-    abstract fun bindBudgetSource(impl: SettingsBudgetSource): BudgetSource
-
-    @Binds
-    abstract fun bindDecisionLog(impl: RoomDecisionLog): DecisionLog
 
     companion object {
         /**

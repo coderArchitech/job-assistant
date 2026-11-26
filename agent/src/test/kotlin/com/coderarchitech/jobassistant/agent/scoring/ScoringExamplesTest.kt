@@ -49,7 +49,7 @@ class ScoringExamplesTest {
         runTest {
             log.jobs[1] = Triple("Senior Android Engineer", "Stripe", WorkMode.REMOTE)
             log.jobs[2] = Triple("PHP Developer", "Acme", WorkMode.ONSITE)
-            log.record(1, Verdict.APPROVE, "Kotlin and payments")
+            log.record(1, Verdict.APPROVE, "Kotlin")
             val firstRun = examples.forNewRun()!!.text
 
             log.record(2, Verdict.REJECT, "Not Android")
@@ -63,7 +63,7 @@ class ScoringExamplesTest {
                 lines[1],
             )
             assertEquals(
-                "2. Approved: \"Senior Android Engineer\" at \"Stripe\" (Bengaluru, remote). Reason: \"Kotlin and payments\".",
+                "2. Approved: \"Senior Android Engineer\" at \"Stripe\" (Bengaluru, remote). Reason: \"Kotlin\".",
                 lines[2],
             )
         }
