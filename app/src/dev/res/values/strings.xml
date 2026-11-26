@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The dev flavor installs beside prod (task T0.06); this label tells them apart. -->
+    <string name="app_name">Job Assistant Dev</string>
+</resources>

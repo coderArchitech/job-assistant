@@ -110,7 +110,7 @@ These come from the PRD and design. A PR that breaks one is not mergeable.
 | Check | What it runs |
 | --- | --- |
 | Build, static checks and unit tests | All four variants (release with R8), `unitTest`, `staticChecks` |
-| Instrumented tests (API 29, 34, 36) | `deviceTest` (every module's instrumented tests) on an emulator per API level |
+| Instrumented tests (API 29, 34, 36) | `deviceTest` (every module's instrumented tests) on an emulator per API level, then the backup check (API 29 and 36) or the flavors-side-by-side check (API 34) |
 
 Two more workflows run only on `main`: "Release bundle" (`release.yml`) builds the signed Play bundle when the upload-key secrets are set, and "Labels" (`labels.yml`) syncs `.github/labels.json`. Release signing and the GitHub settings that protect `main` are described in the design's "Release signing" and "Repository settings" sections. Never put keystores, passwords or signing values in the repo; `.gitignore` already excludes `*.jks`, `*.keystore` and `keystore.properties`.
 
