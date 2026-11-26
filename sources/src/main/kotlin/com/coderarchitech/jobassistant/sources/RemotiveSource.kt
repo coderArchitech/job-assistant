@@ -51,10 +51,14 @@ class SourceThrottledException(
  * applied later.
  *
  * The rate is enforced here: at most [MAX_REQUESTS_PER_DAY] requests in any 24 hours, at least
- * [MIN_GAP] apart, and no new fetch until [MIN_INTERVAL] after the last successful one (that time comes
- * from the cursor, so it holds across app restarts). A fetch that would break a rule throws
- * [SourceThrottledException] without sending anything. The request carries [NoRetry], because a retry would
- * count against the allowance, and every attempt counts, failed or not.
+ * [MIN_GAP] apart, and no new fetch until [MIN_INTERVAL] after the last successful one. A fetch that would
+ * break a rule throws [SourceThrottledException] without sending anything. The request carries [NoRetry],
+ * because a retry would count against the allowance, and every attempt counts, failed or not.
+ *
+ * Limits: the 6-hour rule comes from the cursor, so it holds across app restarts; the count of attempts is
+ * kept in memory and starts again with the app process, so only repeated failures spread over restarts
+ * could pass 4 in a day. Call [fetch] once per run, not once per preset, since the second call inside the
+ * 6 hours is refused; the caller filters the one result for each preset.
  *
  * @param client the `NetworkGroup.JOB_SOURCES` client.
  */

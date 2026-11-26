@@ -199,9 +199,10 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ fixture tests pass, and Job detail shows the source credit.
   _Note:_ the client and `RemoteOkCredit` (name and link) are done. Job detail does not exist yet, so showing the credit is part of T2.21.
 
-- [ ] **T2.06 Build the Remotive client** (P0) · Depends on T2.01
+- [x] **T2.06 Build the Remotive client** (P0) · Depends on T2.01 · [#34](https://github.com/coderArchitech/job-assistant/pull/34)
   Confirm the endpoint and the allowed request rate first; enforce that rate.
   _Done when:_ fixture tests pass, and the client never exceeds the documented rate.
+  _Note:_ the documented rate is at most 4 requests a day and 2 a minute, and the client enforces it. `RemotiveCredit` and the 6-hour rule need the pipeline and Job detail: see T2.20 and T2.21.
 
 - [ ] **T2.07 Build the We Work Remotely RSS client** (P0) · Depends on T2.01
   XML pull parser over the category feeds.
@@ -267,10 +268,11 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 - [ ] **T2.20 Build the background pipeline** (P0) · Depends on T2.01, T2.17, T1.05
   `DiscoverWorker` and `ScoreWorker` (batches of 25 that re-enqueue), a unique periodic request per preset (`run:<presetId>`), a unique one-time chain per tick (`KEEP`), network, charging and battery constraints, "Run now" as expedited work, a `Run` record with per-stage counts, and the "new matches" notification.
   _Done when:_ a run of 200 jobs finishes in under 15 minutes on Wi-Fi and at least 70% of jobs are removed before the LLM.
+  _Note:_ fetch each source once per run and filter the one result for each preset: `RemotiveSource` refuses a second fetch inside 6 hours with `SourceThrottledException`, which is a skip, not a failure to show the user.
 
 - [ ] **T2.21 Build the Jobs screen** (P0) · Depends on T2.17, T1.17
   Job cards with score, tier, matched and missing skills and reason; filter chips (High, Partial, All, source, work mode, posted date, salary); search; Job detail screen.
-  _Done when:_ the High and Partial chips filter correctly (BR4), and Job detail shows `RemoteOkCredit` as a followed link on postings from the `remoteok` source (T2.05).
+  _Done when:_ the High and Partial chips filter correctly (BR4), and Job detail shows `RemoteOkCredit` as a followed link on postings from the `remoteok` source (T2.05) and `RemotiveCredit` on postings from the `remotive` source (T2.06).
 
 - [ ] **T2.22 Build the Review screen** (P0) · Depends on T2.21, T2.18
   Swipe or tap to approve or reject, bulk approve for High match, and a draft preview area (filled by T3.03).
