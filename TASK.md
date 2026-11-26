@@ -315,11 +315,12 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 ### WebView runtime
 
-- [ ] **T3.06 Build the WebView runtime** (P0) · Depends on T0.02
+- [x] **T3.06 Build the WebView runtime** (P0) · Depends on T0.02 · [#40](https://github.com/coderArchitech/job-assistant/pull/40)
   `AgentWebView` with hardened settings (no file or content access, Safe Browsing on, mixed content blocked, no `addJavascriptInterface`), a navigation allowlist per portal, and LinkedIn hosts always blocked.
   _Done when:_ a test page that tries to navigate off the allowlist is stopped.
 
 - [ ] **T3.07 Build the JS bridge** (P0) · Depends on T3.06
+  _Note from T3.06:_ build on `AgentWebView` (`:portals`, package `web`); it forbids `addJavascriptInterface`. A page framed from another origin is not seen by any WebView callback, so the bridge must accept messages only from the portal's own origins (the `NavigationPolicy` hosts), never from frames.
   `addWebMessageListener` restricted to portal origins; `addDocumentStartJavaScript` for adapter injection; typed commands (`query`, `click`, `type`, `select`, `upload`, `waitFor`, `snapshot`); file upload through `onShowFileChooser`; random 1.5–4 s pacing between actions.
   _Done when:_ a page from another origin cannot send bridge messages.
 
@@ -344,6 +345,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ a sample adapter passes the adapter test harness (T3.12).
 
 - [ ] **T3.12 Build the adapter test harness** (P0) · Depends on T3.11
+  _Note from T3.06:_ `AgentWebView` takes a `RequestInterceptor`; `AgentWebViewTest` already serves pages from the test APK through `WebViewAssetLoader` on `appassets.androidplatform.net`, which the harness can reuse.
   Saved HTML snapshots served through `WebViewAssetLoader` in instrumented tests; assertions on selectors, fill order and page classification.
   _Done when:_ a broken selector fails the harness in CI.
 
