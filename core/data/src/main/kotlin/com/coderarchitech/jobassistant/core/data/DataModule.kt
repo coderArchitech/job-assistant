@@ -7,6 +7,7 @@ import com.coderarchitech.jobassistant.core.data.repository.ApplicationRepositor
 import com.coderarchitech.jobassistant.core.data.repository.JobRepository
 import com.coderarchitech.jobassistant.core.data.repository.RoomApplicationRepository
 import com.coderarchitech.jobassistant.core.data.repository.RoomCapSlots
+import com.coderarchitech.jobassistant.core.data.repository.RoomDecisionLog
 import com.coderarchitech.jobassistant.core.data.repository.RoomJobRepository
 import com.coderarchitech.jobassistant.core.data.repository.RoomKnownPostings
 import com.coderarchitech.jobassistant.core.data.repository.RoomSourceCursorStore
@@ -23,6 +24,7 @@ import com.coderarchitech.jobassistant.core.data.settings.createSettingsDataStor
 import com.coderarchitech.jobassistant.core.data.settings.proto.SettingsProto
 import com.coderarchitech.jobassistant.core.model.BudgetSource
 import com.coderarchitech.jobassistant.core.model.CapSlots
+import com.coderarchitech.jobassistant.core.model.DecisionLog
 import com.coderarchitech.jobassistant.core.model.IoDispatcher
 import com.coderarchitech.jobassistant.core.model.KnownPostings
 import com.coderarchitech.jobassistant.core.model.SourceCursorStore
@@ -75,6 +77,9 @@ internal abstract class DataModule {
 
     @Binds
     abstract fun bindBudgetSource(impl: SettingsBudgetSource): BudgetSource
+
+    @Binds
+    abstract fun bindDecisionLog(impl: RoomDecisionLog): DecisionLog
 
     companion object {
         /**
