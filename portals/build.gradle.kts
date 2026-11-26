@@ -10,5 +10,6 @@ dependencies {
     // Per-portal WebView profiles (ProfileStore), and WebViewAssetLoader in the runtime test.
     implementation(libs.androidx.webkit)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.serialization.json) // The JS bridge messages.
     androidTestImplementation(libs.kotlinx.coroutines.android)
 }
