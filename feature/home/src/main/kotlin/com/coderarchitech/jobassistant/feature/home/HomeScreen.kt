@@ -21,11 +21,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun HomeRoute(
     onOpenWatchlist: () -> Unit,
+    onOpenUsage: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    HomeScreen(uiState = uiState, onOpenWatchlist = onOpenWatchlist, modifier = modifier)
+    HomeScreen(uiState = uiState, onOpenWatchlist = onOpenWatchlist, onOpenUsage = onOpenUsage, modifier = modifier)
 }
 
 /** Stateless Home screen. */
@@ -33,6 +34,7 @@ fun HomeRoute(
 fun HomeScreen(
     uiState: HomeUiState,
     onOpenWatchlist: () -> Unit,
+    onOpenUsage: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(modifier = modifier.fillMaxSize()) { padding ->
@@ -53,6 +55,7 @@ fun HomeScreen(
             )
             // Until the app shell (T1.17) brings navigation, Home links to the screens that exist.
             FilledTonalButton(onClick = onOpenWatchlist) { Text(stringResource(R.string.home_watchlist)) }
+            FilledTonalButton(onClick = onOpenUsage) { Text(stringResource(R.string.home_usage)) }
         }
     }
 }
@@ -60,5 +63,6 @@ fun HomeScreen(
 @Preview
 @Composable
 private fun HomeScreenPreview() {
-    HomeScreen(HomeUiState(versionName = "0.1.0-dev", flavor = "dev", isConfigHostSet = false), onOpenWatchlist = {})
+    HomeScreen(HomeUiState(versionName = "0.1.0-dev", flavor = "dev", isConfigHostSet = false), onOpenWatchlist = {
+    }, onOpenUsage = {})
 }

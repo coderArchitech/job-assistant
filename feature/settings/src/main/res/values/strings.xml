@@ -46,4 +46,32 @@
     <string name="ats_greenhouse">Greenhouse</string>
     <string name="ats_lever">Lever</string>
     <string name="ats_ashby">Ashby</string>
+
+    <string name="usage_title">AI usage</string>
+    <string name="usage_this_month">This month</string>
+    <string name="usage_of_cap">of %1$s</string>
+    <string name="usage_cap_explained">Runs stop calling the AI when spending reaches %1$s. Amounts are estimates from the price table.</string>
+    <string name="usage_cap_reached">Budget reached. Runs are paused until %1$s, or until you raise the budget.</string>
+    <string name="usage_cap_near">Almost at the budget. A run pauses as soon as its next AI call could pass %1$s.</string>
+    <string name="usage_budget_save_failed">Couldn\'t save the budget. Try again.</string>
+    <plurals name="usage_today">
+        <item quantity="one">Today: %1$s over %2$d call</item>
+        <item quantity="other">Today: %1$s over %2$d calls</item>
+    </plurals>
+    <string name="usage_monthly_budget">Monthly budget</string>
+    <string name="usage_agent_budget">Browser agent, per day</string>
+    <string name="usage_agent_off">Off</string>
+    <string name="usage_per_day">%1$s a day</string>
+    <string name="usage_change">Change</string>
+    <string name="usage_runs">Recent runs</string>
+    <string name="usage_no_runs">No runs have called the AI yet.</string>
+    <string name="usage_days">By day</string>
+    <string name="usage_no_days">Nothing spent this month.</string>
+    <plurals name="usage_calls_tokens">
+        <item quantity="one">%1$d call · %2$s tokens</item>
+        <item quantity="other">%1$d calls · %2$s tokens</item>
+    </plurals>
+    <string name="usage_budget_invalid">Enter an amount in dollars, up to 10,000, with at most 2 decimals</string>
+    <string name="usage_budget_monthly_hint">AI calls stop for the rest of the month at this amount</string>
+    <string name="usage_budget_agent_hint">0 keeps the browser agent off</string>
 </resources>

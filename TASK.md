@@ -272,6 +272,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 ### Pipeline and screens
 
 - [ ] **T2.20 Build the background pipeline** (P0) · Depends on T2.01, T2.17, T1.05
+  _Note from T4.13:_ when the metered provider refuses a call with `BlockReason.BUDGET_EXCEEDED`, end the run as paused and say why; the usage meter already tells the user the budget is reached.
   `DiscoverWorker` and `ScoreWorker` (batches of 25 that re-enqueue), a unique periodic request per preset (`run:<presetId>`), a unique one-time chain per tick (`KEEP`), network, charging and battery constraints, "Run now" as expedited work, a `Run` record with per-stage counts, and the "new matches" notification.
   _Done when:_ a run of 200 jobs finishes in under 15 minutes on Wi-Fi and at least 70% of jobs are removed before the LLM.
   _Note from T2.11:_ for each `NormalizedPosting`, look up the stored jobs by (source, externalId), canonical URL and `dedupeHash` (`JobDao` has all three), build `StoredMatches` and apply `Deduplicator.decide`: `New` inserts, `Update` refreshes the row, `Alias` inserts with `aliasOfJobId`, `NewPrimary` inserts and repoints the old primary and its aliases. `JobDao` has no update queries yet (by design, status changes go through `JobRepository`), so add narrow ones for refreshing a posting and repointing aliases. Within one run, `Deduplicator.collapse` first.
@@ -331,6 +332,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ wiping one portal leaves another portal's session logged in.
 
 - [ ] **T3.09 Build the config host client** (P0) · Depends on T1.10, D07
+  _Note from T4.13:_ the usage meter (`:feature:settings`, `usage`) has no price-table editor yet; add an "Edit prices" screen there for the user's edits that `PriceTable` reads, since T4.13 left it to this task.
   Fetch adapter bundles and the price table; verify Ed25519 signatures against the two public keys in the app (current and next, D07); fall back to the last good or bundled version; respect `minAppVersion`.
   _Note from T1.10:_ Use `@HttpClientFor(NetworkGroup.CONFIG)`. It reaches only the host in `BuildInfo.configHost`, so a blank host means every call fails with `BlockedRequestException`; treat that as "config host not set".
   _Note from T1.14:_ Implement `PriceTable` (in `:ai`) from the signed price table, with the user's edits. Models it does not list are priced at `FallbackPricing.PRICE`, so list every model the app offers.
@@ -472,9 +474,10 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Note from T1.14:_ Show why AI work stopped when a call returns `LlmResult.Blocked`: `BUDGET_EXCEEDED` (the monthly cap or the browser agent's daily budget), `BUDGET_UNAVAILABLE` (settings or the database could not be read) or `SECRET_IN_PROMPT`. The pipeline runner pauses the agent on the first two.
   _Done when:_ every alert type in the design appears on Home in a test.
 
-- [ ] **T4.13 Build the usage meter** (P0) · Depends on T1.14
+- [x] **T4.13 Build the usage meter** (P0) · Depends on T1.14 · [#43](https://github.com/coderArchitech/job-assistant/pull/43)
   Tokens and cost per day and per run, monthly budget setting, and an editable price table.
   _Done when:_ per-run cost is visible (BR2) and the budget cap pauses runs.
+  _Note:_ done in #43 except the editable price table, which needs the `PriceTable` T3.09 builds from the signed price table; it moved there. The cap pausing runs is the budget guard (T1.14) refusing calls; the meter shows it, and stopping a run on that refusal is the pipeline's (T2.20).
 
 - [ ] **T4.14 Finish scheduling settings** (P0) · Depends on T2.20
   Schedule (3, 6 or 12 hours, or manual), Wi-Fi or any network, charging only; onboarding step 7 (schedule, caps, first run).
