@@ -77,6 +77,7 @@ android {
             dimension = "environment"
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
+            // Its launcher label is "Job Assistant Dev" (src/dev/res), so the two installs can be told apart.
             buildConfigField("String", "CONFIG_HOST", configHost("dev"))
         }
         create("prod") {

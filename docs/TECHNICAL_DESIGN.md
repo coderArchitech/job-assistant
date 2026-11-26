@@ -79,7 +79,7 @@ Versions live in one Gradle version catalog (`gradle/libs.versions.toml`), and s
 
 `compileSdk` is 37 because the newest AndroidX libraries require it; `targetSdk` stays at 36, the Play requirement this design targets, so runtime behavior is unchanged. The application ID cannot change after the first Play upload, so confirm it before T0.07.
 
-**Build variants.** Flavors `dev` and `prod` × build types `debug` and `release`. `dev` adds the `.dev` package suffix and `-dev` version suffix, so both install side by side. Release builds run R8 with resource shrinking. `BuildConfig.CONFIG_HOST` comes from `gradle.properties` per flavor (empty until T3.10), and `BuildConfig.HTTP_LOGGING` is true only in debug.
+**Build variants.** Flavors `dev` and `prod` × build types `debug` and `release`. `dev` adds the `.dev` package suffix, the `-dev` version suffix and the launcher label "Job Assistant Dev", so both install side by side and can be told apart; `scripts/ci/flavors_side_by_side_check.sh` installs both debug builds on the API 34 emulator in CI, checks both packages are present and that both run at once (task T0.06). Release builds run R8 with resource shrinking. `BuildConfig.CONFIG_HOST` comes from `gradle.properties` per flavor (empty until T3.10), and `BuildConfig.HTTP_LOGGING` is true only in debug.
 
 ## Agent pipeline and scheduling
 

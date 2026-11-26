@@ -74,6 +74,7 @@ jobs:
           script: |
             ./gradlew deviceTest
             if [ "${{ matrix.api-level }}" != "34" ]; then ./gradlew installDevDebug && scripts/ci/backup_restore_check.sh com.coderarchitech.jobassistant.dev; fi
+            if [ "${{ matrix.api-level }}" = "34" ]; then scripts/ci/flavors_side_by_side_check.sh; fi
       - name: Upload reports
         if: failure()
         uses: actions/upload-artifact@v6

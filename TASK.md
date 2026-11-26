@@ -51,7 +51,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ a PR shows all checks, and a failing test blocks merging.
   _Workflows added in [#4](https://github.com/coderArchitech/job-assistant/pull/4) and all checks run on PRs. Still open: make the checks required in branch protection (T0.08) so a failing test blocks merging._
 
-- [ ] **T0.06 Define build types and flavors** (P0) · Depends on T0.01
+- [x] **T0.06 Define build types and flavors** (P0) · Depends on T0.01 · [#41](https://github.com/coderArchitech/job-assistant/pull/41)
   `debug` and `release` build types; `dev` and `prod` flavors (dev points at a test config host). HTTP logging only in debug.
   _Done when:_ both flavors install side by side on one device.
 
