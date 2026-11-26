@@ -1,5 +1,6 @@
 package com.coderarchitech.jobassistant.sources.dedupe
 
+import com.coderarchitech.jobassistant.sources.LeverRegion
 import com.coderarchitech.jobassistant.sources.normalize.NormalizedPosting
 import java.time.Instant
 
@@ -10,7 +11,7 @@ data class KeyedPosting(
     val dedupeHash: String,
 ) {
     /** Greenhouse, Lever and Ashby copies have the cleanest apply path, so they are kept as the primary. */
-    val isAts: Boolean get() = posting.atsType != null
+    val isAts: Boolean get() = posting.atsType != null || Deduplicator.isAtsSource(posting.source)
 
     override fun toString(): String = "KeyedPosting(${posting.source}/${posting.externalId})"
 
@@ -77,7 +78,8 @@ sealed interface DedupeDecision {
  * same job. Pure and thread-safe; storing the result is the pipeline's job.
  */
 object Deduplicator {
-    private val ATS_PREFIXES = listOf("greenhouse:", "lever:", "lever-eu:", "ashby:")
+    // Lever's come from its regions, so a new region is covered; DeduplicatorTest checks every ATS source's key.
+    private val ATS_PREFIXES = listOf("greenhouse:", "ashby:") + LeverRegion.entries.map { "${it.keyPrefix}:" }
 
     /** True for a source key of an ATS board (`greenhouse:stripe`), whose copy is preferred as the primary. */
     fun isAtsSource(source: String): Boolean = ATS_PREFIXES.any { source.startsWith(it) }
@@ -110,21 +112,31 @@ object Deduplicator {
             }
     }
 
-    /** The decision for a new [posting] against the stored jobs it matches. */
+    /**
+     * The decision for a new [posting] against the stored jobs it matches. When its URL and hash point at
+     * different stored groups, it joins the best of them (one with an ATS primary, else the oldest); merging
+     * those groups with each other is left alone, since they were judged different jobs when stored.
+     */
     fun decide(
         posting: KeyedPosting,
         stored: StoredMatches,
     ): DedupeDecision {
         val same = stored.sameSourceAndId
-        val match = stored.sameCanonicalUrl.firstOrNull() ?: stored.sameDedupeHash.firstOrNull()
-        val primaryId = match?.let { it.aliasOfJobId ?: it.id }
+        val target = (stored.sameCanonicalUrl + stored.sameDedupeHash).minWithOrNull(STORED_ORDER)
         return when {
             same != null -> DedupeDecision.Update(same.id)
-            match == null || primaryId == null -> DedupeDecision.New
-            posting.isAts && !isAtsSource(match.primarySource) -> DedupeDecision.NewPrimary(primaryId)
-            else -> DedupeDecision.Alias(primaryId)
+            target == null -> DedupeDecision.New
+            posting.isAts && !isAtsSource(target.primarySource) -> DedupeDecision.NewPrimary(target.groupId)
+            else -> DedupeDecision.Alias(target.groupId)
         }
     }
+
+    /** The id of the group's primary row. */
+    private val StoredJob.groupId: Long get() = aliasOfJobId ?: id
+
+    /** Which stored group a posting joins: one with an ATS primary, else the oldest. */
+    private val STORED_ORDER =
+        compareByDescending<StoredJob> { isAtsSource(it.primarySource) }.thenBy { it.groupId }
 
     private val PRIMARY_ORDER =
         compareByDescending<KeyedPosting> { it.isAts }

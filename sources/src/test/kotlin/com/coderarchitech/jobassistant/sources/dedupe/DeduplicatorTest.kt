@@ -1,9 +1,14 @@
 package com.coderarchitech.jobassistant.sources.dedupe
 
 import com.coderarchitech.jobassistant.core.model.AtsType
+import com.coderarchitech.jobassistant.sources.AshbySource
+import com.coderarchitech.jobassistant.sources.GreenhouseSource
+import com.coderarchitech.jobassistant.sources.LeverRegion
+import com.coderarchitech.jobassistant.sources.LeverSource
 import com.coderarchitech.jobassistant.sources.RawPosting
 import com.coderarchitech.jobassistant.sources.normalize.JobNormalizer
 import com.coderarchitech.jobassistant.sources.normalize.NormalizedPosting
+import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -95,7 +100,7 @@ class DeduplicatorTest {
                 AtsType.LEVER,
             ),
             // Job 4: joined through a chain: A and B share a link, B and C share company and title.
-            posting("remotive", "rv-4", "Globex", "Data Engineer", "https://globex.example/careers/4?ref=remotive"),
+            posting("remotive", "rv-4", "Globex", "Data Engineer", "https://globex.example/careers/4?utm_source=rv"),
             posting("remoteok", "ro-4", "Globex", "Data Engineer II", "https://globex.example/careers/4"),
             posting(
                 "weworkremotely:remote-programming-jobs",
@@ -248,5 +253,62 @@ class DeduplicatorTest {
             Deduplicator.decide(ats, StoredMatches(sameCanonicalUrl = listOf(aliasRow))),
         )
         assertTrue(Deduplicator.isAtsSource("lever-eu:acme"))
+    }
+
+    @Test
+    fun everyAtsSourceKeyIsRecognised() {
+        val client = OkHttpClient()
+        val keys =
+            listOf(GreenhouseSource("stripe", "Stripe", client).key, AshbySource("Ashby", "Ashby", client).key) +
+                LeverRegion.entries.map { LeverSource("acme", "Acme", client, region = it).key }
+        assertTrue(keys.toString(), keys.all(Deduplicator::isAtsSource))
+        assertTrue(!Deduplicator.isAtsSource("remoteok") && !Deduplicator.isAtsSource("weworkremotely:x"))
+    }
+
+    @Test
+    fun keysDoNotMergeDifferentJobs() {
+        val different =
+            listOf(
+                "C++ Engineer" to "C# Engineer",
+                "Senior Engineer, Hybrid Cloud" to "Senior Engineer, Remote Access",
+                "Android Engineer (Remote - US)" to "Android Engineer (Remote - EU)",
+                "Fully-Remote Senior Engineer" to "Fully-Remote Staff Engineer",
+            )
+        for ((a, b) in different) assertNotEquals("$a vs $b", DedupeKeys.titleKey(a), DedupeKeys.titleKey(b))
+        assertEquals(DedupeKeys.titleKey("Data Engineer"), DedupeKeys.titleKey("Data Engineer, Remote"))
+        assertNotEquals(
+            "a routing fragment names the page",
+            DedupeKeys.canonicalUrl("https://careers.acme.com/#/jobs/123"),
+            DedupeKeys.canonicalUrl("https://careers.acme.com/#/jobs/456"),
+        )
+        assertNotEquals(
+            "a generic parameter may name the job",
+            DedupeKeys.canonicalUrl("https://jobs.acme.example/apply?ref=1001"),
+            DedupeKeys.canonicalUrl("https://jobs.acme.example/apply?ref=1002"),
+        )
+    }
+
+    @Test
+    fun aPostingMatchingTwoStoredGroupsJoinsTheAtsOne() {
+        val board = KeyedPosting.of(fixture[0])
+        val boardGroup = StoredJob(id = 2, source = "remoteok", aliasOfJobId = null, primarySource = "remoteok")
+        val atsGroup =
+            StoredJob(id = 5, source = "greenhouse:stripe", aliasOfJobId = null, primarySource = "greenhouse:stripe")
+
+        assertEquals(
+            DedupeDecision.Alias(5),
+            Deduplicator.decide(
+                board,
+                StoredMatches(sameCanonicalUrl = listOf(boardGroup), sameDedupeHash = listOf(atsGroup)),
+            ),
+        )
+        assertEquals(
+            "an ATS posting joins an ATS group rather than taking over a board group",
+            DedupeDecision.Alias(5),
+            Deduplicator.decide(
+                KeyedPosting.of(fixture[1]),
+                StoredMatches(sameCanonicalUrl = listOf(boardGroup), sameDedupeHash = listOf(atsGroup)),
+            ),
+        )
     }
 }
