@@ -83,3 +83,27 @@ data class DailyReport(
     val failures: Int,
     val costMicros: Long,
 )
+
+/** AI usage added up over some calls: a day, a run or a month (task T4.13). Costs are estimates. */
+data class UsageTotal(
+    val calls: Int = 0,
+    val inputTokens: Long = 0,
+    val outputTokens: Long = 0,
+    val costMicros: Long = 0,
+) {
+    operator fun plus(other: UsageTotal) =
+        UsageTotal(
+            calls + other.calls,
+            inputTokens + other.inputTokens,
+            outputTokens + other.outputTokens,
+            costMicros + other.costMicros,
+        )
+}
+
+/** The AI usage of one run (BR2: the user sees what each run cost). */
+data class RunUsage(
+    val runId: Long,
+    /** When the run's first AI call was made. */
+    val startedAt: Instant,
+    val total: UsageTotal,
+)

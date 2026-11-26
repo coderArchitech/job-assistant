@@ -8,8 +8,10 @@ import com.coderarchitech.jobassistant.core.data.repository.JobRepository
 import com.coderarchitech.jobassistant.core.data.repository.RoomApplicationRepository
 import com.coderarchitech.jobassistant.core.data.repository.RoomJobRepository
 import com.coderarchitech.jobassistant.core.data.repository.RoomTransactionRunner
+import com.coderarchitech.jobassistant.core.data.repository.RoomUsageReport
 import com.coderarchitech.jobassistant.core.data.repository.RoomWatchlistRepository
 import com.coderarchitech.jobassistant.core.data.repository.TransactionRunner
+import com.coderarchitech.jobassistant.core.data.repository.UsageReport
 import com.coderarchitech.jobassistant.core.data.repository.WatchlistRepository
 import com.coderarchitech.jobassistant.core.data.settings.AUTO_SEND_CONSENT_FILE_NAME
 import com.coderarchitech.jobassistant.core.data.settings.AutoSendConsentMarker
@@ -55,6 +57,9 @@ internal abstract class DataModule {
 
     @Binds
     abstract fun bindWatchlistRepository(impl: RoomWatchlistRepository): WatchlistRepository
+
+    @Binds
+    abstract fun bindUsageReport(impl: RoomUsageReport): UsageReport
 
     companion object {
         /**

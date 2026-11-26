@@ -28,6 +28,16 @@ interface RunDao {
     fun observeRecent(limit: Int): Flow<List<RunEntity>>
 }
 
+/** One run's usage as the run query returns it. */
+data class RunUsageRow(
+    val runId: Long,
+    val startedAt: Instant,
+    val calls: Int,
+    val inputTokens: Long,
+    val outputTokens: Long,
+    val costMicros: Long,
+)
+
 /** Writes and sums AI usage. */
 @Dao
 interface UsageRecordDao {
@@ -49,6 +59,21 @@ interface UsageRecordDao {
     /** Emits the total estimated cost for one run whenever usage changes. */
     @Query("SELECT COALESCE(SUM(estimatedCostMicros), 0) FROM usage_record WHERE runId = :runId")
     fun observeCostMicrosForRun(runId: Long): Flow<Long>
+
+    /** Emits every call recorded at or after [from], oldest first, whenever usage changes. */
+    @Query("SELECT * FROM usage_record WHERE recordedAt >= :from ORDER BY recordedAt, id")
+    fun observeSince(from: Instant): Flow<List<UsageRecordEntity>>
+
+    /** Emits the [limit] most recent runs' usage, newest first, whenever usage changes. */
+    @Query(
+        """
+        SELECT runId, MIN(recordedAt) AS startedAt, COUNT(*) AS calls, SUM(inputTokens) AS inputTokens,
+               SUM(outputTokens) AS outputTokens, SUM(estimatedCostMicros) AS costMicros
+        FROM usage_record WHERE runId IS NOT NULL
+        GROUP BY runId ORDER BY startedAt DESC, runId DESC LIMIT :limit
+        """,
+    )
+    fun observeRuns(limit: Int): Flow<List<RunUsageRow>>
 
     /** All calls recorded for one run, oldest first. */
     @Query("SELECT * FROM usage_record WHERE runId = :runId ORDER BY id")
