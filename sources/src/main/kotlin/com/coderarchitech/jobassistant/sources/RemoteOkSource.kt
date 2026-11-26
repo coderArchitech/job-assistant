@@ -9,8 +9,10 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
@@ -82,9 +84,9 @@ class RemoteOkSource(
 
     @Suppress("ReturnCount") // One early exit per required field reads better than a nested null check.
     private fun JobDto.toPosting(): RawPosting? {
-        val postingId = id.clean() ?: return null
+        val postingId = id?.content.clean() ?: return null
         val postingTitle = position.clean() ?: return null
-        val postingUrl = url.clean() ?: applyUrl.clean() ?: return null
+        val postingUrl = listOf(url, applyUrl).firstNotNullOfOrNull { it.clean()?.takeIf(::isWebLink) } ?: return null
         val postingCompany = company.clean() ?: return null
         return RawPosting(
             externalId = postingId,
@@ -94,22 +96,22 @@ class RemoteOkSource(
             location = location.clean(),
             description = description?.takeIf { it.isNotBlank() },
             postedAt = epoch?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) } ?: date.toInstant(),
-            applyUrl = applyUrl.clean()?.takeIf { it != postingUrl },
+            applyUrl = applyUrl.clean()?.takeIf { it != postingUrl && isWebLink(it) },
             compensation = salary(),
             workplaceType = "remote",
         )
     }
 
     private fun JobDto.salary(): String? {
-        val low = salaryMin ?: 0
-        val high = salaryMax ?: 0
+        // US dollars a year; 0 means not given, and the two figures may come in either order.
+        val figures = listOfNotNull(salaryMin, salaryMax).filter { it > 0 }.map { it.toLong() }
+        val low = figures.minOrNull() ?: return null
+        val high = figures.max()
         val money = NumberFormat.getIntegerInstance(Locale.US)
-        return when {
-            low > 0 && high > low -> "\$${money.format(low)} - \$${money.format(high)}"
-            high > 0 || low > 0 -> "\$${money.format(maxOf(low, high))}"
-            else -> null
-        }
+        return if (high > low) "\$${money.format(low)} - \$${money.format(high)}" else "\$${money.format(low)}"
     }
+
+    private fun isWebLink(text: String): Boolean = text.toHttpUrlOrNull() != null
 
     @Suppress("SwallowedException")
     private fun String?.toInstant(): Instant? =
@@ -122,7 +124,8 @@ class RemoteOkSource(
     @Suppress("LongParameterList") // One field per part of Remote OK's posting that is used.
     @Serializable
     private class JobDto(
-        val id: String? = null,
+        // A string today; read as text whichever way the feed writes it.
+        val id: JsonPrimitive? = null,
         val epoch: Long? = null,
         val date: String? = null,
         val company: String? = null,
@@ -131,8 +134,8 @@ class RemoteOkSource(
         val location: String? = null,
         @SerialName("apply_url") val applyUrl: String? = null,
         val url: String? = null,
-        @SerialName("salary_min") val salaryMin: Long? = null,
-        @SerialName("salary_max") val salaryMax: Long? = null,
+        @SerialName("salary_min") val salaryMin: Double? = null,
+        @SerialName("salary_max") val salaryMax: Double? = null,
     )
 
     companion object {

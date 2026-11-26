@@ -85,6 +85,29 @@ class RemoteOkSourceTest {
         }
 
     @Test
+    fun oddButUsableEntriesAreStillRead() =
+        runTest {
+            reply(
+                body =
+                    """[{"legal":"terms"},
+                    {"id":7,"company":"A","position":"Numeric id","url":"https://remoteOK.com/7","salary_min":90000.5,"salary_max":0},
+                    {"id":"8","company":"B","position":"Reversed pay","url":"https://remoteOK.com/8","salary_min":120000,
+                     "salary_max":90000,"apply_url":"https://remoteOK.com/8","epoch":1795000000,"date":"2020-01-01T00:00:00+00:00"},
+                    {"id":"9","company":"C","position":"Mail link","url":"mailto:a@b.test","apply_url":"javascript:x"},
+                    {"id":"10","company":"D","position":"No dates","url":"https://remoteOK.com/10"}]""",
+            )
+
+            val byId = source().fetch(null, preset).associateBy { it.externalId }
+
+            assertEquals(setOf("7", "8", "10"), byId.keys)
+            assertEquals("\$90,000", byId.getValue("7").compensation)
+            assertEquals("\$90,000 - \$120,000", byId.getValue("8").compensation)
+            assertEquals("epoch wins over date", Instant.ofEpochSecond(1795000000), byId.getValue("8").postedAt)
+            assertNull("an apply link equal to the page link is dropped", byId.getValue("8").applyUrl)
+            assertNull(byId.getValue("10").postedAt)
+        }
+
+    @Test
     fun theRequestNeedsNoKey() =
         runTest {
             reply()
