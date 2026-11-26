@@ -95,7 +95,8 @@ class RemoteOkSource(
             url = postingUrl,
             location = location.clean(),
             description = description?.takeIf { it.isNotBlank() },
-            postedAt = epoch?.takeIf { it > 0 }?.let { Instant.ofEpochSecond(it) } ?: date.toInstant(),
+            postedAt =
+                epoch?.takeIf { it in 1..MAX_EPOCH_SECONDS }?.let { Instant.ofEpochSecond(it) } ?: date.toInstant(),
             applyUrl = applyUrl.clean()?.takeIf { it != postingUrl && isWebLink(it) },
             compensation = salary(),
             workplaceType = "remote",
@@ -141,6 +142,9 @@ class RemoteOkSource(
     companion object {
         /** The source key; there is one Remote OK feed. */
         const val KEY = "remoteok"
+
+        // The year 9999; a bigger value is a bug in the feed (or milliseconds) and Instant would refuse it.
+        private const val MAX_EPOCH_SECONDS = 253_402_300_799L
         private const val DEFAULT_BASE_URL = "https://remoteok.com/"
     }
 }

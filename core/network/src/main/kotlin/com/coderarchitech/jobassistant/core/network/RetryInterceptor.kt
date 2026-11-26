@@ -2,10 +2,17 @@ package com.coderarchitech.jobassistant.core.network
 
 import okhttp3.Call
 import okhttp3.Interceptor
+import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 import java.time.Duration
 import kotlin.random.Random
+
+/**
+ * Put on a request (`Request.Builder().tag(NoRetry::class.java, NoRetry)`) to send it exactly once. For a
+ * host that limits how many requests may be sent in a day, where a retry would count against the limit.
+ */
+object NoRetry
 
 /** Waits between retries. A seam so tests do not really sleep. */
 internal fun interface Sleeper {
@@ -72,6 +79,14 @@ internal class RetryInterceptor(
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        val sendOnce = request.tag(NoRetry::class.java) != null
+        return if (sendOnce) chain.proceed(request) else proceedWithRetries(chain, request)
+    }
+
+    private fun proceedWithRetries(
+        chain: Interceptor.Chain,
+        request: Request,
+    ): Response {
         var retry = 0
         while (true) {
             val response = chain.proceed(request)
