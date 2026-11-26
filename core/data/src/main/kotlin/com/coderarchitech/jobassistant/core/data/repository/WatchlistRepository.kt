@@ -25,9 +25,13 @@ interface WatchlistRepository {
     /** Every company, by name, updated whenever the list changes. */
     fun observeAll(): Flow<List<CompanyWatchlistEntry>>
 
-    /** Adds [entry] (its id is ignored), or updates the company with its id when that is not 0. */
+    /**
+     * Adds [entry] when its id is 0, or updates the company with that id. [WatchlistSave.Duplicate] when another
+     * company already has the same ATS and board, ignoring case, since board names are not case sensitive.
+     */
     suspend fun save(entry: CompanyWatchlistEntry): WatchlistSave
 
+    /** Removes the company; its board is no longer checked. */
     suspend fun delete(entry: CompanyWatchlistEntry)
 }
 
@@ -43,6 +47,15 @@ internal class RoomWatchlistRepository
         @Suppress("SwallowedException") // The only constraint that can fail is the unique board; it is the result.
         override suspend fun save(entry: CompanyWatchlistEntry): WatchlistSave {
             val clean = entry.copy(name = entry.name.trim(), boardSlug = entry.boardSlug.trim())
+            // The unique index is case sensitive and board names are not, so `Stripe` must find `stripe`.
+            if (dao
+                    .findByBoard(
+                        clean.atsType,
+                        clean.boardSlug,
+                    ).any { it.id != clean.id }
+            ) {
+                return WatchlistSave.Duplicate
+            }
             return try {
                 if (clean.id == 0L) {
                     WatchlistSave.Saved(dao.insert(clean.toEntity()))

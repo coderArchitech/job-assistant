@@ -47,8 +47,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -75,7 +77,7 @@ data class WatchlistActions(
     val check: (CompanyWatchlistEntry) -> Unit = {},
     val setEnabled: (CompanyWatchlistEntry, Boolean) -> Unit = { _, _ -> },
     val remove: (CompanyWatchlistEntry) -> Unit = {},
-    val undoRemove: () -> Unit = {},
+    val undoRemove: (CompanyWatchlistEntry) -> Unit = {},
     val messageShown: () -> Unit = {},
     val editor: EditorActions = EditorActions(),
 )
@@ -157,37 +159,35 @@ fun WatchlistScreen(
     state.editor?.let { CompanyEditor(it, actions.editor) }
 }
 
+/**
+ * Shows each message once. The message is cleared only after its snackbar closes: clearing it first would
+ * change the effect's key and cancel the snackbar before the user could press Undo.
+ */
 @Composable
 private fun MessageEffect(
     message: WatchlistMessage?,
     snackbar: SnackbarHostState,
     actions: WatchlistActions,
 ) {
-    val removed = message as? WatchlistMessage.Removed
     val text =
         when (message) {
-            is WatchlistMessage.Removed -> stringResource(R.string.watchlist_removed, message.name)
+            is WatchlistMessage.Removed -> stringResource(R.string.watchlist_removed, message.entry.name)
             is WatchlistMessage.Saved -> stringResource(R.string.watchlist_saved, message.name)
             null -> null
         }
     val undo = stringResource(R.string.watchlist_undo)
     LaunchedEffect(message) {
-        if (text == null) return@LaunchedEffect
-        actions.messageShown()
+        if (message == null || text == null) return@LaunchedEffect
+        val removed = message as? WatchlistMessage.Removed
         val result =
             snackbar.showSnackbar(
                 text,
-                actionLabel =
-                    if (removed !=
-                        null
-                    ) {
-                        undo
-                    } else {
-                        null
-                    },
-                withDismissAction = removed == null,
+                actionLabel = removed?.let { undo },
+                withDismissAction =
+                    removed == null,
             )
-        if (result == SnackbarResult.ActionPerformed) actions.undoRemove()
+        if (result == SnackbarResult.ActionPerformed && removed != null) actions.undoRemove(removed.entry)
+        actions.messageShown()
     }
 }
 
@@ -258,7 +258,12 @@ private fun CompanyCard(
     actions: WatchlistActions,
 ) {
     val entry = row.entry
-    OutlinedCard(onClick = { actions.edit(entry) }, modifier = Modifier.fillMaxWidth()) {
+    val editLabel = stringResource(R.string.watchlist_edit)
+    OutlinedCard(
+        onClick = { actions.edit(entry) },
+        // TalkBack says "double tap to edit" rather than a bare "double tap to activate".
+        modifier = Modifier.fillMaxWidth().semantics { onClick(label = editLabel, action = null) },
+    ) {
         ListItem(
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             leadingContent = { Monogram(entry.name, dimmed = !entry.enabled) },
@@ -290,7 +295,8 @@ private fun Monogram(
     Surface(
         shape = CircleShape,
         color = if (dimmed) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.secondaryContainer,
-        modifier = Modifier.size(40.dp),
+        // The name is read right after; the letter alone would be read as a separate item.
+        modifier = Modifier.size(40.dp).clearAndSetSemantics {},
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(
@@ -312,8 +318,7 @@ private fun StatusLine(
         when {
             paused -> stringResource(R.string.watchlist_paused) to colors.onSurfaceVariant
             check is CheckState.Found ->
-                pluralStringResource(R.plurals.watchlist_status_found, check.postings, check.postings) to
-                    colors.primary
+                check.label() to colors.primary
             check is CheckState.NotFound -> stringResource(R.string.watchlist_status_not_found) to colors.error
             check is CheckState.Failed -> stringResource(R.string.watchlist_status_failed) to colors.error
             check is CheckState.Checking ->

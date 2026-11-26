@@ -96,6 +96,7 @@ internal fun CompanyForm(
             TextButton(onClick = actions.close) { Text(stringResource(R.string.editor_cancel)) }
             Button(
                 onClick = actions.save,
+                enabled = !editor.saving,
                 modifier = Modifier.testTag("save"),
             ) { Text(stringResource(R.string.editor_save)) }
         }
@@ -170,8 +171,7 @@ private fun CheckRow(
         val detail =
             when (val check = editor.check) {
                 is CheckState.Found ->
-                    pluralStringResource(R.plurals.watchlist_status_found, check.postings, check.postings) + ". " +
-                        stringResource(R.string.editor_found_detail)
+                    check.label() + ". " + stringResource(R.string.editor_found_detail)
                 CheckState.NotFound -> stringResource(R.string.editor_not_found_detail)
                 is CheckState.Failed -> stringResource(R.string.watchlist_status_failed) + ": " + check.reason
                 CheckState.Checking -> stringResource(R.string.watchlist_status_checking)
@@ -199,4 +199,13 @@ internal fun AtsType.label(): Int =
         AtsType.GREENHOUSE -> R.string.ats_greenhouse
         AtsType.LEVER -> R.string.ats_lever
         AtsType.ASHBY -> R.string.ats_ashby
+    }
+
+/** "76 open roles", or "100+ open roles" when only the first page was counted. */
+@Composable
+internal fun CheckState.Found.label(): String =
+    if (atLeast) {
+        stringResource(R.string.watchlist_status_found_at_least, postings)
+    } else {
+        pluralStringResource(R.plurals.watchlist_status_found, postings, postings)
     }

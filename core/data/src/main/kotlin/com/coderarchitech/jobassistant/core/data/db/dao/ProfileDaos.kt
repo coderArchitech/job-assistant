@@ -10,6 +10,7 @@ import com.coderarchitech.jobassistant.core.data.db.entity.CompanyWatchlistEntit
 import com.coderarchitech.jobassistant.core.data.db.entity.ProfileEntity
 import com.coderarchitech.jobassistant.core.data.db.entity.SearchPresetEntity
 import com.coderarchitech.jobassistant.core.data.db.entity.SourceCursorEntity
+import com.coderarchitech.jobassistant.core.model.AtsType
 import kotlinx.coroutines.flow.Flow
 
 /** Reads and writes the single profile row. */
@@ -70,6 +71,13 @@ interface CompanyWatchlistDao {
     /** Deletes a company. */
     @Delete
     suspend fun delete(entry: CompanyWatchlistEntity)
+
+    /** Companies on [atsType]'s board named [boardSlug], ignoring case, as the ATS does. */
+    @Query("SELECT * FROM company_watchlist WHERE atsType = :atsType AND boardSlug = :boardSlug COLLATE NOCASE")
+    suspend fun findByBoard(
+        atsType: AtsType,
+        boardSlug: String,
+    ): List<CompanyWatchlistEntity>
 
     /** Companies whose boards are fetched on every run. */
     @Query("SELECT * FROM company_watchlist WHERE enabled = 1 ORDER BY name COLLATE NOCASE")

@@ -23,6 +23,7 @@
         <item quantity="one">%1$d open role</item>
         <item quantity="other">%1$d open roles</item>
     </plurals>
+    <string name="watchlist_status_found_at_least">%1$d+ open roles</string>
     <string name="watchlist_status_not_found">Board not found</string>
     <string name="watchlist_status_failed">Couldn\'t check</string>
 

@@ -125,11 +125,87 @@ class WatchlistViewModelTest {
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
 
             viewModel.remove(stripe)
-            assertEquals(WatchlistMessage.Removed("Stripe"), state().message)
+            assertEquals(WatchlistMessage.Removed(stripe), state().message)
             assertTrue(repository.rows.value.isEmpty())
 
-            viewModel.undoRemove()
+            viewModel.undoRemove(stripe)
             assertEquals(listOf("Stripe"), repository.rows.value.map { it.name })
+        }
+
+    @Test
+    fun aBoardDifferingOnlyInCaseIsADuplicate() =
+        runTest {
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+            add("Stripe", AtsType.GREENHOUSE, "stripe", check = false)
+
+            add("Stripe", AtsType.GREENHOUSE, "Stripe", check = false)
+
+            assertTrue(state().editor!!.duplicate)
+        }
+
+    @Test
+    fun aCheckBelongsToTheBoardItChecked() =
+        runTest {
+            val acme = CompanyWatchlistEntry(1, "Acme", AtsType.GREENHOUSE, "stripe")
+            repository.rows.value = listOf(acme)
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+            viewModel.check(acme)
+            assertTrue(state().companies.single().check is CheckState.Found)
+
+            // Edited to another board without a new check: the old result must not stay on the row.
+            viewModel.startEditing(acme)
+            viewModel.onBoardChange("typo-board")
+            viewModel.save()
+
+            assertEquals(CheckState.NotChecked, state().companies.single().check)
+        }
+
+    @Test
+    fun editingWhileARowCheckRunsDoesNotLockTheForm() =
+        runTest {
+            val acme = CompanyWatchlistEntry(1, "Acme", AtsType.GREENHOUSE, "stripe")
+            repository.rows.value = listOf(acme)
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+            checker.gate = CompletableDeferred()
+            viewModel.check(acme)
+
+            viewModel.startEditing(acme)
+
+            assertEquals(CheckState.NotChecked, state().editor!!.check)
+            checker.gate!!.complete(Unit)
+        }
+
+    @Test
+    fun saveIsIgnoredWhileASaveIsWritten() =
+        runTest {
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
+            viewModel.startAdding()
+            viewModel.onNameChange("Stripe")
+            viewModel.onBoardChange("stripe")
+
+            viewModel.save()
+            viewModel.save()
+
+            assertEquals(1, repository.rows.value.size)
+        }
+
+    @Test
+    fun aFullLeverPageIsALowerBound() =
+        runTest {
+            val lever = FakeChecker(mapOf((AtsType.LEVER to "big") to BoardCheck.Valid(100)))
+            val model = WatchlistViewModel(repository, lever)
+            val big = CompanyWatchlistEntry(1, "Big", AtsType.LEVER, "big")
+            repository.rows.value = listOf(big)
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { model.uiState.collect {} }
+
+            model.check(big)
+
+            assertEquals(
+                CheckState.Found(100, atLeast = true),
+                model.uiState.value.companies
+                    .single()
+                    .check,
+            )
         }
 
     @Test

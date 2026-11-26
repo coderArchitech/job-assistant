@@ -25,8 +25,10 @@ sealed interface CheckState {
 
     data object Checking : CheckState
 
+    /** The board answered with [postings] openings; [atLeast] when that is only its first page. */
     data class Found(
         val postings: Int,
+        val atLeast: Boolean = false,
     ) : CheckState
 
     data object NotFound : CheckState
@@ -53,6 +55,8 @@ data class EditorState(
     /** Set once the user tries to save, so fields are not marked wrong while still being typed. */
     val showErrors: Boolean = false,
     val duplicate: Boolean = false,
+    /** A save is being written; Save does nothing until it finishes. */
+    val saving: Boolean = false,
 ) {
     val nameMissing: Boolean get() = name.isBlank()
     val boardInvalid: Boolean get() = !BoardChecker.isWellFormed(ats, board)
@@ -61,8 +65,9 @@ data class EditorState(
 
 /** A one-time message for the snackbar. */
 sealed interface WatchlistMessage {
+    /** [entry] was removed; the snackbar's Undo puts this one back, whatever was removed after it. */
     data class Removed(
-        val name: String,
+        val entry: CompanyWatchlistEntry,
     ) : WatchlistMessage
 
     data class Saved(
@@ -89,10 +94,19 @@ class WatchlistViewModel
         private val repository: WatchlistRepository,
         private val checker: BoardChecker,
     ) : ViewModel() {
-        private val checks = MutableStateFlow<Map<Long, CheckState>>(emptyMap())
+        /**
+         * A check belongs to a row and the board it checked, so a result that arrives after the row's board
+         * was edited, or after the row was removed, never labels the wrong board.
+         */
+        private data class CheckKey(
+            val id: Long,
+            val ats: AtsType,
+            val board: String,
+        )
+
+        private val checks = MutableStateFlow<Map<CheckKey, CheckState>>(emptyMap())
         private val local = MutableStateFlow(LocalState())
         private var editorCheck: Job? = null
-        private var lastRemoved: CompanyWatchlistEntry? = null
 
         private data class LocalState(
             val editor: EditorState? = null,
@@ -103,7 +117,7 @@ class WatchlistViewModel
             combine(repository.observeAll(), checks, local) { entries, checkMap, state ->
                 WatchlistUiState(
                     loading = false,
-                    companies = entries.map { CompanyRow(it, checkMap[it.id] ?: CheckState.NotChecked) },
+                    companies = entries.map { CompanyRow(it, checkMap[it.key()] ?: CheckState.NotChecked) },
                     editor = state.editor,
                     message = state.message,
                 )
@@ -111,7 +125,9 @@ class WatchlistViewModel
 
         fun startAdding() = local.update { it.copy(editor = EditorState()) }
 
-        fun startEditing(entry: CompanyWatchlistEntry) =
+        fun startEditing(entry: CompanyWatchlistEntry) {
+            // A row check still running belongs to the row; the form starts without one and can run its own.
+            val known = checks.value[entry.key()]?.takeUnless { it == CheckState.Checking } ?: CheckState.NotChecked
             local.update {
                 it.copy(
                     editor =
@@ -121,10 +137,11 @@ class WatchlistViewModel
                             ats = entry.atsType,
                             board = entry.boardSlug,
                             enabled = entry.enabled,
-                            check = checks.value[entry.id] ?: CheckState.NotChecked,
+                            check = known,
                         ),
                 )
             }
+        }
 
         fun closeEditor() {
             editorCheck?.cancel()
@@ -150,35 +167,46 @@ class WatchlistViewModel
             editEditor { it.copy(check = CheckState.Checking) }
             editorCheck =
                 viewModelScope.launch {
-                    val result = checker.check(editor.ats, editor.board).toState()
+                    val result = checker.check(editor.ats, editor.board).toState(editor.ats)
                     // Apply it only if the form still shows the board that was checked.
-                    editEditor { current ->
-                        if (current.ats == editor.ats &&
-                            current.board == editor.board
+                    editEditor { now ->
+                        if (now.ats == editor.ats &&
+                            now.board == editor.board
                         ) {
-                            current.copy(check = result)
+                            now.copy(check = result)
                         } else {
-                            current
+                            now
                         }
                     }
                 }
         }
 
         fun save() {
-            val editor = local.value.editor ?: return
-            if (editor.nameMissing || editor.boardInvalid) {
-                editEditor { it.copy(showErrors = true) }
-                return
+            val editor = local.value.editor
+            when {
+                editor == null || editor.saving -> Unit
+                editor.nameMissing || editor.boardInvalid -> editEditor { it.copy(showErrors = true) }
+                else -> write(editor)
             }
+        }
+
+        private fun write(editor: EditorState) {
+            editEditor { it.copy(saving = true) }
             viewModelScope.launch {
                 val entry = CompanyWatchlistEntry(editor.id, editor.name, editor.ats, editor.board, editor.enabled)
                 when (val saved = repository.save(entry)) {
-                    WatchlistSave.Duplicate -> editEditor { it.copy(duplicate = true, showErrors = true) }
+                    WatchlistSave.Duplicate ->
+                        editEditor {
+                            it.copy(
+                                duplicate = true,
+                                showErrors = true,
+                                saving = false,
+                            )
+                        }
                     is WatchlistSave.Saved -> {
                         editorCheck?.cancel()
-                        if (editor.check != CheckState.NotChecked && editor.check != CheckState.Checking) {
-                            checks.update { it + (saved.id to editor.check) }
-                        }
+                        val done = editor.check.takeUnless { it == CheckState.NotChecked || it == CheckState.Checking }
+                        done?.let { check -> checks.update { it + (entry.copy(id = saved.id).key() to check) } }
                         local.update { it.copy(editor = null, message = WatchlistMessage.Saved(editor.name.trim())) }
                     }
                 }
@@ -186,11 +214,12 @@ class WatchlistViewModel
         }
 
         fun check(entry: CompanyWatchlistEntry) {
-            if (checks.value[entry.id] == CheckState.Checking) return
-            checks.update { it + (entry.id to CheckState.Checking) }
+            val key = entry.key()
+            if (checks.value[key] == CheckState.Checking) return
+            checks.update { it + (key to CheckState.Checking) }
             viewModelScope.launch {
-                val result = checker.check(entry.atsType, entry.boardSlug).toState()
-                checks.update { it + (entry.id to result) }
+                val result = checker.check(entry.atsType, entry.boardSlug).toState(entry.atsType)
+                checks.update { it + (key to result) }
             }
         }
 
@@ -204,16 +233,16 @@ class WatchlistViewModel
         fun remove(entry: CompanyWatchlistEntry) {
             viewModelScope.launch {
                 repository.delete(entry)
-                lastRemoved = entry
-                checks.update { it - entry.id }
-                local.update { it.copy(message = WatchlistMessage.Removed(entry.name)) }
+                checks.update { map -> map.filterKeys { it.id != entry.id } }
+                local.update { it.copy(message = WatchlistMessage.Removed(entry)) }
             }
         }
 
-        /** Puts the company removed last back, as a new row. */
-        fun undoRemove() {
-            val entry = lastRemoved ?: return
-            lastRemoved = null
+        /**
+         * Puts [entry] back as a new row. If the same board was added again meanwhile it is already on the
+         * list, which is what undo wanted, so the duplicate is not an error.
+         */
+        fun undoRemove(entry: CompanyWatchlistEntry) {
             viewModelScope.launch { repository.save(entry.copy(id = 0)) }
         }
 
@@ -222,14 +251,23 @@ class WatchlistViewModel
         private fun editEditor(change: (EditorState) -> EditorState) =
             local.update { state -> state.editor?.let { state.copy(editor = change(it)) } ?: state }
 
-        private fun BoardCheck.toState(): CheckState =
+        private fun CompanyWatchlistEntry.key() = CheckKey(id, atsType, boardSlug.lowercase())
+
+        /** Lever is counted from its first page only, so a full page is a lower bound. */
+        private fun BoardCheck.toState(ats: AtsType): CheckState =
             when (this) {
-                is BoardCheck.Valid -> CheckState.Found(jobCount)
+                is BoardCheck.Valid ->
+                    CheckState.Found(
+                        jobCount,
+                        atLeast =
+                            ats == AtsType.LEVER && jobCount >= LEVER_PAGE,
+                    )
                 BoardCheck.NotFound -> CheckState.NotFound
                 is BoardCheck.Failed -> CheckState.Failed(message)
             }
 
         private companion object {
             const val STOP_TIMEOUT_MS = 5_000L
+            const val LEVER_PAGE = 100
         }
     }

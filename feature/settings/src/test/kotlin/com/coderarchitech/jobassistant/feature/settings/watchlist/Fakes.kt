@@ -23,7 +23,9 @@ class FakeWatchlist(
         val clean = entry.copy(name = entry.name.trim(), boardSlug = entry.boardSlug.trim())
         val clash =
             rows.value.any {
-                it.id != clean.id && it.atsType == clean.atsType && it.boardSlug == clean.boardSlug
+                it.id != clean.id &&
+                    it.atsType == clean.atsType &&
+                    it.boardSlug.equals(clean.boardSlug, ignoreCase = true)
             }
         if (clash) return WatchlistSave.Duplicate
         val saved = if (clean.id == 0L) clean.copy(id = nextId++) else clean
