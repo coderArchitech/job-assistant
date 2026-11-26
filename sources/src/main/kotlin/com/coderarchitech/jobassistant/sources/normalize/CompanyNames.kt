@@ -38,6 +38,7 @@ object CompanyNames {
     private val SPACES = Regex("\\s+")
     private val NOT_WORD = Regex("[^\\p{L}\\p{N}]+")
     private val MARKS = Regex("\\p{M}+")
+    private val DROPPED = Regex("[.'’]")
 
     /** The name trimmed with runs of spaces collapsed, for display. */
     fun clean(name: String): String = name.trim().replace(SPACES, " ")
@@ -50,8 +51,8 @@ object CompanyNames {
     fun key(name: String): String {
         val folded =
             Normalizer
-                // Dropping full stops first turns `S.A.` into `sa` and `Pvt.` into `pvt`.
-                .normalize(name.lowercase(Locale.ROOT).replace(".", "").replace("&", " and "), Normalizer.Form.NFD)
+                // Dropping full stops and apostrophes first turns `S.A.` into `sa` and `McDonald's` into `mcdonalds`.
+                .normalize(name.lowercase(Locale.ROOT).replace(DROPPED, "").replace("&", " and "), Normalizer.Form.NFD)
                 .replace(MARKS, "")
         val words = folded.split(NOT_WORD).filter { it.isNotEmpty() }.toMutableList()
         if (words.size > 1 && words.first() == "the") words.removeAt(0)

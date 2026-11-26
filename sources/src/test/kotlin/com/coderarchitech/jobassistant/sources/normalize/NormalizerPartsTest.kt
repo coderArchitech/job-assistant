@@ -166,4 +166,105 @@ class NormalizerPartsTest {
         assertNull(posting.applyUrl)
         assertEquals("lever:acme", posting.source)
     }
+
+    @Test
+    fun numbersBesideASalaryAreNotReadAsIt() {
+        val cases =
+            listOf(
+                "Base salary \$150,000 with a 10% bonus" to Salary(150_000, 150_000, "USD"),
+                "Salary \$120k + 401k match" to Salary(120_000, 120_000, "USD"),
+                "Salary range for 2026: \$100k-\$120k" to Salary(100_000, 120_000, "USD"),
+                "Level 3, \$95,000 - \$110,000" to Salary(95_000, 110_000, "USD"),
+                // Lever writes a one-sided range with the dash on the missing side.
+                "USD -150000 per year" to Salary(null, 150_000, "USD"),
+                "USD 100000- per year" to Salary(100_000, null, "USD"),
+            )
+        val wrong = cases.filter { (text, expected) -> SalaryParser.parse(text) != expected }
+        assertEquals(wrong.joinToString("\n") { "${it.first} -> ${SalaryParser.parse(it.first)}" }, 0, wrong.size)
+    }
+
+    @Test
+    fun dailyAndWeeklyRatesAreNotAYearlySalary() {
+        for (text in listOf("GBP 500-600 per day", "\$2,000/week", "Day rate £450", "€800 weekly")) {
+            assertNull(text, SalaryParser.parse(text))
+        }
+    }
+
+    @Test
+    fun aSalarySentenceKeepsItsDecimalsAndAbbreviations() {
+        assertEquals(
+            Salary(3_500, 5_000, "USD", SalaryPeriod.MONTH),
+            SalaryParser.findIn("Salary: \$3.5k-\$5k/month. Apply now."),
+        )
+        assertEquals(inr(1_200_000, 1_200_000), SalaryParser.findIn("Salary Rs. 12 LPA. Bengaluru."))
+        assertEquals(
+            Salary(90_000, 120_000, "USD"),
+            SalaryParser.findIn("Salary range: \$90,000.00 - \$120,000.00"),
+        )
+    }
+
+    @Test
+    fun workModeIsNotFoolledByTitlesOrNegations() {
+        assertEquals(
+            "a full week in the office is on-site",
+            WorkMode.ONSITE,
+            WorkModes.detect(null, "Berlin", "Engineer", "You will work 5 days a week in the office."),
+        )
+        assertEquals(
+            WorkMode.UNKNOWN,
+            WorkModes.detect(null, "San Francisco, CA", "Senior Distributed Systems Engineer", null),
+        )
+        assertEquals(WorkMode.UNKNOWN, WorkModes.detect(null, "Denver", "Remote Sensing Scientist", null))
+        assertEquals(WorkMode.REMOTE, WorkModes.detect(null, null, "Graphic Design Intern (Remote)", null))
+        assertEquals(
+            WorkMode.UNKNOWN,
+            WorkModes.detect(null, "Austin, TX", "Engineer", "Please note this is not a remote position."),
+        )
+    }
+
+    @Test
+    fun placeNamesStopAtThePlace() {
+        assertEquals(
+            "Must be authorized to work in United States",
+            RegionLimits.find(
+                WorkMode.ONSITE,
+                null,
+                "You must be authorized to work in the United States and able to travel.",
+            ),
+        )
+        assertEquals(
+            "Must be authorized to work in U.S.",
+            RegionLimits.find(WorkMode.ONSITE, null, "You must be authorized to work in the U.S. This role is hybrid."),
+        )
+        assertEquals(
+            "Bosnia and Herzegovina only",
+            RegionLimits.find(WorkMode.ONSITE, null, "You must be based in Bosnia and Herzegovina."),
+        )
+    }
+
+    @Test
+    fun worldwideWrittenAnyWayIsNoLimit() {
+        for (location in listOf(
+            "Remote Only",
+            "Worldwide (Remote)",
+            "Anywhere - Remote",
+            "Global, Remote",
+            "Remote — Worldwide",
+        )) {
+            assertNull(location, RegionLimits.find(WorkMode.REMOTE, location, null))
+        }
+        assertEquals("US only", RegionLimits.find(WorkMode.REMOTE, "Remote — US", null))
+    }
+
+    @Test
+    fun tableCellsAndApostrophesAreHandled() {
+        assertEquals(
+            "Salary \$120,000\nLocation US only",
+            HtmlText.toPlainText(
+                "<table><tr><td>Salary</td><td>\$120,000</td></tr><tr><td>Location</td><td>US only</td></tr></table>",
+            ),
+        )
+        assertEquals(CompanyNames.key("McDonalds"), CompanyNames.key("McDonald's"))
+        assertEquals(CompanyNames.key("McDonalds"), CompanyNames.key("McDonald’s Corporation"))
+    }
 }

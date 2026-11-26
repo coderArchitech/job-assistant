@@ -10,12 +10,14 @@ import com.coderarchitech.jobassistant.core.model.WorkMode
  */
 object RegionLimits {
     /**
-     * A place name: capitalised words (`United States`, `Bosnia and Herzegovina`) or an abbreviation such as
-     * `U.S.` or `EU`. A full stop ends it unless it is part of an abbreviation, so the next sentence is not
-     * taken in.
+     * A place name: capitalised words (`United States`, `Bosnia and Herzegovina`), or a dotted abbreviation
+     * such as `U.S.`, which ends the name. `and` or `of` is taken only when a capitalised word follows, and a
+     * full stop always ends it, so `the United States and able to travel` or `the U.S. This role` stop at the
+     * place.
      */
-    private const val WORD = "(?:[A-Z](?:\\.[A-Z])+\\.?|[A-Z][A-Za-z]*)"
-    private const val PLACE = "((?:the )?$WORD(?:[ -](?:$WORD|of|and)(?=[ -]?[A-Z]|\\b))*)"
+    private const val NAME = "(?:[A-Z][A-Za-z]*)"
+    private const val ABBREVIATION = "(?:[A-Z](?:\\.[A-Z])+\\.)"
+    private const val PLACE = "((?:the )?(?:$ABBREVIATION|$NAME(?:(?:[ -](?:of|and))?[ -]$NAME)*))"
 
     private val WORLDWIDE =
         Regex(
@@ -26,10 +28,10 @@ object RegionLimits {
     private val ONLY = Regex("^(.+?)\\s+only$", RegexOption.IGNORE_CASE)
     private val REMOTE_PREFIX =
         Regex(
-            "^(?:remote|fully remote)\\s*(?:[-–:,(]|\\bin\\b|\\bwithin\\b|\\bfrom\\b)\\s*(.+?)\\)?$",
+            "^(?:remote|fully remote)\\s*(?:[-–—:,(]|\\bin\\b|\\bwithin\\b|\\bfrom\\b)\\s*(.+?)\\)?$",
             RegexOption.IGNORE_CASE,
         )
-    private val REMOTE_SUFFIX = Regex("^(.+?)[\\s,-]+\\(?remote\\)?$", RegexOption.IGNORE_CASE)
+    private val REMOTE_SUFFIX = Regex("^(.+?)[\\s,–—-]+\\(?remote\\)?$", RegexOption.IGNORE_CASE)
 
     private val AUTHORIZED =
         Regex("(?i:must be (?:legally )?(?:authori[sz]ed|eligible|permitted) to work in) $PLACE")
@@ -81,13 +83,14 @@ object RegionLimits {
         val place =
             when {
                 only != null -> only.groupValues[1].trim()
-                prefixed != null -> prefixed.groupValues[1].trim().takeUnless { WORLDWIDE.matches(it) }
+                prefixed != null -> prefixed.groupValues[1].trim()
                 suffixed != null -> suffixed.groupValues[1].trim()
                 workMode == WorkMode.REMOTE -> text
                 else -> null
             }
-        return place?.let { "$it only" }
+        // `Remote Only`, `Worldwide (Remote)` and `Anywhere - Remote` are no limit at all.
+        return place?.takeUnless { WORLDWIDE.matches(it) }?.let { "$it only" }
     }
 
-    private fun place(match: MatchResult): String = match.groupValues[1].removePrefix("the ").trimEnd('.', ' ')
+    private fun place(match: MatchResult): String = match.groupValues[1].removePrefix("the ").trim()
 }

@@ -387,6 +387,14 @@ A source that can filter by date uses the cursor; one that cannot returns everyt
 - Salaries are parsed into a min–max range with currency and period, including Indian formats such as "12–18 LPA".
 - Company names are normalized (case, punctuation, suffixes such as "Pvt Ltd" or "Inc") for matching.
 
+**Normalizer implementation** (`:sources`, package `normalize`, task T2.10). `JobNormalizer.normalize(raw, sourceKey)` turns a `RawPosting` into a `NormalizedPosting`; it is pure, and the deduplicator adds the canonical URL and `dedupeHash`.
+
+- `HtmlText` converts HTML with Jsoup: paragraphs and headings on their own lines, list items as `- ` lines, table cells separated by spaces, scripts and styles dropped. The stored description is capped at 8,000 characters at a word break, so the prompt never needs to cut it again.
+- `WorkModes` uses the source's own field first, then the location, then a mode tagged onto the title (`(Remote)`, `- Hybrid`; a word inside a title such as "Remote Sensing" does not count), then clear phrases in the description that are not negated. A city alone is `UNKNOWN`, never a guess of on-site.
+- `RegionLimits` reads `US Only`, `Remote - US` and `Remote (Canada)` as `US only` and so on; for a remote job any other location (`USA, Canada`) is where candidates must be; worldwide wording in any form is no limit. From the description it adds "Must be authorized to work in X", "X only" for "must be based in X" and "No visa sponsorship".
+- `SalaryParser` reads the source's salary field, or else the first description sentence about pay (salary, CTC, compensation and similar), so a loan size or funding round is never a salary. It needs a currency (symbol, code, or an Indian unit, which means rupees), takes only amounts next to it, reads `k`, `L`, `LPA`, `lakh`, `Cr`, Indian and Western digit grouping, ranges with any dash or `to`, one-sided ranges, and hourly, monthly or yearly periods. A daily or weekly rate gives no salary, since `Salary` has no such period.
+- `CompanyNames.key` is lower case with accents, full stops, apostrophes and punctuation removed, `&` as `and`, a leading `The` and trailing legal forms (Inc, LLC, Pvt Ltd, GmbH, S.A. and others) dropped.
+
 **Deduplication**, in order:
 
 1. Same (source, externalId) → update the existing row.
@@ -627,7 +635,7 @@ Every external dependency (job APIs, AI providers, portals) is tested against re
 
 | Layer | Tools | What it covers | When it runs |
 | --- | --- | --- | --- |
-| Unit (JVM) | JUnit, kotlinx-coroutines-test, Turbine, MockK | Normalizer, deduplicator, hard filters, tiering, caps, budget guard, prompt builders, claim check | Every push |
+| Unit (JVM) | JUnit, kotlinx-coroutines-test, Turbine, MockK | Normalizer (with a table of 53 real postings), deduplicator, hard filters, tiering, caps, budget guard, prompt builders, claim check | Every push |
 | API contract | OkHttp `MockWebServer` with recorded JSON | Each job source and both AI providers, including 401, 429, 529 and malformed output | Every push |
 | Database | Room in-memory tests, `MigrationTestHelper` | DAOs, status transitions, every schema migration | Every push |
 | Portal adapters | Instrumented tests; saved HTML snapshots served through `WebViewAssetLoader` | Selectors, fill sequence, CAPTCHA detection, page classification per adapter version | Every push (emulator) |

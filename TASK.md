@@ -219,13 +219,14 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 ### Normalization and deduplication
 
-- [ ] **T2.10 Build the normalizer** (P0) · Depends on T2.01
+- [x] **T2.10 Build the normalizer** (P0) · Depends on T2.01 · [#36](https://github.com/coderArchitech/job-assistant/pull/36)
   HTML to plain text (capped at 8,000 characters for prompts); work mode (Remote, Hybrid, Onsite, Unknown); region and work-authorization limits; salary ranges, including Indian formats such as "12–18 LPA"; company-name normalization.
   _Note from T2.01:_ The pipeline calls `SourceSync.fetchNew`, stores the new postings as jobs (normalizing and deduplicating them), and only then calls `SourceSync.commit`. Store each posting with `Job.source` equal to the source's `key`.
   _Note from T2.02:_ `RawPosting.description` from Greenhouse is HTML with the entity escaping already removed, and `postedAt` is the first-published date. The live check for a board is `JOBASSISTANT_LIVE=1 ./gradlew :sources:testDebugUnitTest --tests '*GreenhouseLiveTest'`.
   _Done when:_ a table-driven test of at least 50 real postings passes.
 
 - [ ] **T2.11 Build the deduplicator** (P0) · Depends on T2.10
+  _Note from T2.10:_ `JobNormalizer.normalize(raw, sourceKey)` gives a `NormalizedPosting` with `companyKey` (`CompanyNames.key`, the normalized company for `dedupeHash`) but no canonical URL or hash; those are this task's.
   Three steps: same source and external ID; same canonical URL; same `dedupeHash` of company and title. Keep the ATS copy as primary and store the others as aliases.
   _Done when:_ a fixture set with known cross-source duplicates collapses to the expected count.
 

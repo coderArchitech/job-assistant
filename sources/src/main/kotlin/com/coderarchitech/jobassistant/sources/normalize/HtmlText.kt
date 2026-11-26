@@ -35,6 +35,10 @@ object HtmlText {
             "pre",
             "hr",
         )
+
+    /** Table and definition cells, kept apart by a space so `<td>Salary</td><td>$1</td>` reads `Salary $1`. */
+    private val CELLS = setOf("td", "th", "dt", "dd")
+    private val OWN_LINE = setOf("li", "tr")
     private val SPACES = Regex("[ \\t\\u00A0\\u200B]+")
     private val BLANK_LINES = Regex("\\n{3,}")
 
@@ -55,6 +59,7 @@ object HtmlText {
                     when {
                         node is TextNode -> out.append(node.wholeText)
                         node is Element && node.normalName() == "li" -> out.append("\n- ")
+                        node is Element && node.normalName() in CELLS -> out.append(' ')
                         node is Element && node.normalName() in BLOCKS -> out.append('\n')
                     }
                 }
@@ -63,8 +68,9 @@ object HtmlText {
                     node: Node,
                     depth: Int,
                 ) {
-                    // A list item already starts on its own line, so it adds no break after itself.
-                    if (node is Element && node.normalName() in BLOCKS && node.normalName() != "li") out.append('\n')
+                    // A list item or table row already starts on its own line, so it adds no break after itself.
+                    val name = (node as? Element)?.normalName()
+                    if (name in BLOCKS && name !in OWN_LINE) out.append('\n')
                 }
             },
         )
