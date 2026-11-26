@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.webkit.CookieManager
 import android.webkit.WebStorage
 import android.webkit.WebView
+import androidx.webkit.Profile
 import androidx.webkit.ProfileStore
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
@@ -49,26 +50,28 @@ class PortalSessions(
     /** The cookie jar [portal]'s pages use, or null when its profile does not exist yet (never opened). */
     @SuppressLint("RequiresFeature")
     fun cookiesOf(portal: PortalSession): CookieManager? =
-        if (isolated) {
-            ProfileStore
-                .getInstance()
-                .getProfile(
-                    portal.profileName,
-                )?.cookieManager
-        } else {
-            CookieManager.getInstance()
-        }
+        if (isolated) existingProfile(portal)?.cookieManager else CookieManager.getInstance()
+
+    /**
+     * The portal's profile if it exists. Checks the names first: some WebViews (API 36's) crash inside
+     * `getProfile` for a name with no profile instead of returning null.
+     */
+    @SuppressLint("RequiresFeature")
+    private fun existingProfile(portal: PortalSession): Profile? {
+        val store = ProfileStore.getInstance()
+        return if (portal.profileName in store.allProfileNames) store.getProfile(portal.profileName) else null
+    }
 
     /** Signs [portal] out by removing what it stored, leaving every other portal signed in. */
     suspend fun wipe(portal: PortalSession) = if (isolated) wipeProfile(portal) else wipeSharedJar(portal)
 
     /**
-     * Empties the portal's profile in place rather than deleting it: the WebView hands out a dead object for a
-     * deleted profile, which crashes the next use, and an empty profile is signed out all the same.
+     * Empties the portal's profile in place rather than deleting it: deleting fails while a WebView still holds
+     * the profile, and an empty profile is signed out all the same.
      */
     @SuppressLint("RequiresFeature")
     private suspend fun wipeProfile(portal: PortalSession) {
-        val profile = ProfileStore.getInstance().getProfile(portal.profileName) ?: return
+        val profile = existingProfile(portal) ?: return
         profile.cookieManager.removeAll()
         profile.cookieManager.flush()
         profile.webStorage.deleteAllData()

@@ -33,16 +33,13 @@ class PortalSessionsTest {
     fun signOutEverywhere() =
         onMain {
             CookieManager.getInstance().removeAllCookies(null)
-            // Profiles are emptied, never deleted: the WebView crashes on a deleted profile's object.
+            // Profiles are emptied, never deleted, and looked up only by a name that exists: API 36's WebView
+            // crashes in getProfile for a missing name.
             if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
-                portals.forEach {
-                    ProfileStore
-                        .getInstance()
-                        .getProfile(
-                            it.profileName,
-                        )?.cookieManager
-                        ?.removeAllCookies(null)
-                }
+                val store = ProfileStore.getInstance()
+                portals
+                    .filter { it.profileName in store.allProfileNames }
+                    .forEach { store.getProfile(it.profileName)?.cookieManager?.removeAllCookies(null) }
             }
         }
 
