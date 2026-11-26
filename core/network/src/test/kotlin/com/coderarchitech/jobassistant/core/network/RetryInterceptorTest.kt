@@ -133,6 +133,18 @@ class RetryInterceptorTest {
     }
 
     @Test
+    fun aRequestTaggedNoRetryIsSentOnce() {
+        respond(503)
+        respond(200)
+
+        val request = get().newBuilder().tag(NoRetry::class.java, NoRetry).build()
+        client().newCall(request).execute().use { assertEquals(503, it.code) }
+
+        assertEquals(1, server.requestCount)
+        assertTrue(waits.isEmpty())
+    }
+
+    @Test
     fun doesNotRetrySuccessOrRedirectResponses() {
         respond(200)
         respond(204)
