@@ -91,4 +91,15 @@ class RoomUsageReportTest : DatabaseTest() {
             assertEquals(2_000_000, settings.state.value.budget.monthlyCapMicros)
             assertTrue(report.observe().first().capReached)
         }
+
+    @Test
+    fun theLastFivePercentOfTheCapIsNearTheCap() =
+        runBlocking {
+            spend(null, 9_600_000, "2026-11-20T10:00:00Z")
+
+            val overview = report().observe().first()
+
+            assertTrue(overview.nearCap)
+            assertFalse(overview.capReached)
+        }
 }

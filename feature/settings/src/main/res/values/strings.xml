@@ -52,6 +52,8 @@
     <string name="usage_of_cap">of %1$s</string>
     <string name="usage_cap_explained">Runs stop calling the AI when spending reaches %1$s. Amounts are estimates from the price table.</string>
     <string name="usage_cap_reached">Budget reached. Runs are paused until %1$s, or until you raise the budget.</string>
+    <string name="usage_cap_near">Almost at the budget. A run pauses as soon as its next AI call could pass %1$s.</string>
+    <string name="usage_budget_save_failed">Couldn\'t save the budget. Try again.</string>
     <plurals name="usage_today">
         <item quantity="one">Today: %1$s over %2$d call</item>
         <item quantity="other">Today: %1$s over %2$d calls</item>

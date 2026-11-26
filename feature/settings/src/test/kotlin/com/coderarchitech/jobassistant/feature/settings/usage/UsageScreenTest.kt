@@ -64,7 +64,7 @@ class UsageScreenTest {
     ) = compose.setContent {
         JobAssistantTheme(darkTheme = dark, dynamicColor = false) {
             UsageScreen(
-                UsageUiState(overview(spentMicros)),
+                UsageUiState.Ready(overview(spentMicros)),
                 actions,
                 onBack = {},
                 zone = ZoneOffset.ofHoursMinutes(5, 30),

@@ -81,22 +81,23 @@ private fun SpendSummary(overview: UsageOverview) {
     }
     LinearProgressIndicator(
         progress = { if (cap == 0L) 1f else (spent.toFloat() / cap).coerceIn(0f, 1f) },
-        color = if (overview.capReached) colors.error else colors.primary,
+        color = if (overview.capReached || overview.nearCap) colors.error else colors.primary,
         modifier = Modifier.fillMaxWidth(),
     )
     val status =
-        if (overview.capReached) {
-            stringResource(
-                R.string.usage_cap_reached,
-                overview.resetsOn.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)),
-            )
-        } else {
-            stringResource(R.string.usage_cap_explained, Money.format(cap))
+        when {
+            overview.capReached ->
+                stringResource(
+                    R.string.usage_cap_reached,
+                    overview.resetsOn.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)),
+                )
+            overview.nearCap -> stringResource(R.string.usage_cap_near, Money.format(cap))
+            else -> stringResource(R.string.usage_cap_explained, Money.format(cap))
         }
     Text(
         status,
         style = MaterialTheme.typography.bodyMedium,
-        color = if (overview.capReached) colors.error else colors.onSurfaceVariant,
+        color = if (overview.capReached || overview.nearCap) colors.error else colors.onSurfaceVariant,
         modifier = Modifier.testTag("capStatus"),
     )
 }

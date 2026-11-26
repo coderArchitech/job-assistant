@@ -101,17 +101,16 @@ fun UsageScreen(
             )
         },
     ) { padding ->
-        val overview = state.overview
-        if (overview == null) {
-            Box(
-                Modifier.padding(padding).fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) { CircularProgressIndicator() }
-        } else {
-            UsageContent(overview, actions, zone, PaddingValues(top = padding.calculateTopPadding()))
+        when (state) {
+            UsageUiState.Loading ->
+                Box(
+                    Modifier.padding(padding).fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) { CircularProgressIndicator() }
+            is UsageUiState.Ready -> UsageContent(state.overview, actions, zone, padding)
         }
     }
-    state.editor?.let { BudgetDialog(it, actions) }
+    (state as? UsageUiState.Ready)?.editor?.let { BudgetDialog(it, actions) }
 }
 
 @Composable
@@ -243,11 +242,12 @@ private fun BudgetDialog(
                 onValueChange = actions.budgetText,
                 prefix = { Text("$") },
                 singleLine = true,
-                isError = editor.invalid,
+                isError = editor.invalid || editor.saveFailed,
                 supportingText = {
                     Text(
                         stringResource(
                             when {
+                                editor.saveFailed -> R.string.usage_budget_save_failed
                                 editor.invalid -> R.string.usage_budget_invalid
                                 editor.field == BudgetField.MONTHLY -> R.string.usage_budget_monthly_hint
                                 else -> R.string.usage_budget_agent_hint

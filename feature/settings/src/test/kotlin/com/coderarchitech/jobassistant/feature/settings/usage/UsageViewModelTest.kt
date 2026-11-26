@@ -64,14 +64,15 @@ class UsageViewModelTest {
             viewModel.editBudget(BudgetField.MONTHLY)
             assertEquals(
                 "10",
-                viewModel.uiState.value.editor!!
+                (viewModel.uiState.value as UsageUiState.Ready)
+                    .editor!!
                     .text,
             )
             viewModel.onBudgetText("$25.50")
             viewModel.saveBudget()
 
             assertEquals(25_500_000L, report.budget.value.monthlyCapMicros)
-            assertNull(viewModel.uiState.value.editor)
+            assertNull((viewModel.uiState.value as UsageUiState.Ready).editor)
         }
 
     @Test
@@ -84,7 +85,8 @@ class UsageViewModelTest {
             viewModel.saveBudget()
 
             assertTrue(
-                viewModel.uiState.value.editor!!
+                (viewModel.uiState.value as UsageUiState.Ready)
+                    .editor!!
                     .invalid,
             )
             assertEquals(Budget().browserAgentDailyMicros, report.budget.value.browserAgentDailyMicros)
@@ -99,6 +101,11 @@ class UsageViewModelTest {
         assertEquals("2.5", Money.plainDollars(2_500_000))
         assertEquals(2_500_000L, Money.parseDollars(" $2.50 "))
         assertEquals(0L, Money.parseDollars("0"))
-        for (bad in listOf("", "abc", "-1", "10001", "1.234", "1,000")) assertNull(bad, Money.parseDollars(bad))
+        assertEquals("a decimal comma", 2_500_000L, Money.parseDollars("2,50"))
+        assertEquals("trailing zeros are fine", 10_000_000L, Money.parseDollars("10.000"))
+        for (bad in listOf("", "abc", "-1", "10001", "1.234", "1,000.5")) assertNull(bad, Money.parseDollars(bad))
+        assertEquals("1.0M", Money.tokens(999_960))
+        assertEquals("191.4k", Money.tokens(191_400))
+        assertEquals("812", Money.tokens(812))
     }
 }
