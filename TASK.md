@@ -327,7 +327,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   `addWebMessageListener` restricted to portal origins; `addDocumentStartJavaScript` for adapter injection; typed commands (`query`, `click`, `type`, `select`, `upload`, `waitFor`, `snapshot`); file upload through `onShowFileChooser`; random 1.5–4 s pacing between actions.
   _Done when:_ a page from another origin cannot send bridge messages.
 
-- [ ] **T3.08 Isolate sessions per portal** (P0) · Depends on T3.06
+- [x] **T3.08 Isolate sessions per portal** (P0) · Depends on T3.06 · [#44](https://github.com/coderArchitech/job-assistant/pull/44)
   One WebView profile per portal through `ProfileStore`, with a shared `CookieManager` fallback where multi-profile is unsupported; per-portal wipe.
   _Done when:_ wiping one portal leaves another portal's session logged in.
 
@@ -345,6 +345,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 ### Portal adapters
 
 - [ ] **T3.11 Build the adapter framework** (P0) · Depends on T3.07, T3.09
+  _Note from T3.08:_ call `PortalSessions.attach(webView, portal)` on each `AgentWebView` before its first load, and build `PortalSessions` with every portal so a fallback wipe spares their domains.
   `ScriptedPortalAdapter` implementing `PortalAdapter` (`login`, `search`, `getDetails`, `apply`, `healthCheck`); the manifest format (version, selectors, flows, health-check steps, `minAppVersion`).
   _Done when:_ a sample adapter passes the adapter test harness (T3.12).
 
