@@ -322,7 +322,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   `AgentWebView` with hardened settings (no file or content access, Safe Browsing on, mixed content blocked, no `addJavascriptInterface`), a navigation allowlist per portal, and LinkedIn hosts always blocked.
   _Done when:_ a test page that tries to navigate off the allowlist is stopped.
 
-- [ ] **T3.07 Build the JS bridge** (P0) · Depends on T3.06
+- [x] **T3.07 Build the JS bridge** (P0) · Depends on T3.06 · [#46](https://github.com/coderArchitech/job-assistant/pull/46)
   _Note from T3.06:_ build on `AgentWebView` (`:portals`, package `web`); it forbids `addJavascriptInterface`. A page framed from another origin is not seen by any WebView callback, so the bridge must accept messages only from the portal's own origins (the `NavigationPolicy` hosts), never from frames.
   `addWebMessageListener` restricted to portal origins; `addDocumentStartJavaScript` for adapter injection; typed commands (`query`, `click`, `type`, `select`, `upload`, `waitFor`, `snapshot`); file upload through `onShowFileChooser`; random 1.5–4 s pacing between actions.
   _Done when:_ a page from another origin cannot send bridge messages.
@@ -345,11 +345,13 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 ### Portal adapters
 
 - [ ] **T3.11 Build the adapter framework** (P0) · Depends on T3.07, T3.09
+  _Note from T3.07:_ Drive pages through `JsBridge` (`:portals`, `web.bridge`): `attach` it before the first load, and after a step that navigates, call `awaitPage(newerThan = generation)` with the generation read before the step. `PageChanged` and `NoReply` mean the step's outcome is unknown; never retry a submit on them (rule 5). Adapter bundles are injected the same way, for the portal's origins only.
   _Note from T3.08:_ call `PortalSessions.attach(webView, portal)` on each `AgentWebView` before its first load, and build `PortalSessions` with every portal so a fallback wipe spares their domains.
   `ScriptedPortalAdapter` implementing `PortalAdapter` (`login`, `search`, `getDetails`, `apply`, `healthCheck`); the manifest format (version, selectors, flows, health-check steps, `minAppVersion`).
   _Done when:_ a sample adapter passes the adapter test harness (T3.12).
 
 - [ ] **T3.12 Build the adapter test harness** (P0) · Depends on T3.11
+  _Note from T3.07:_ `JsBridgeTest` already serves pages on made-up origins with one `WebViewAssetLoader` per host; reuse that, with `Pacer.NONE`.
   _Note from T3.06:_ `AgentWebView` takes a `RequestInterceptor`; `AgentWebViewTest` already serves pages from the test APK through `WebViewAssetLoader` on `appassets.androidplatform.net`, which the harness can reuse.
   Saved HTML snapshots served through `WebViewAssetLoader` in instrumented tests; assertions on selectors, fill order and page classification.
   _Done when:_ a broken selector fails the harness in CI.
@@ -373,6 +375,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 ### Login and OTP
 
 - [ ] **T3.17 Implement portal login** (P0) · Depends on T3.08, T1.07
+  _Note from T3.07:_ Type passwords and OTPs with `BridgeCommand.Type(..., secret = true)`, so the field never comes back in a query or snapshot.
   Check a logged-in marker first; otherwise fill credentials from the vault through the bridge. Results: `LoggedIn`, `OtpNeeded`, or `Failed` with a reason. Two bad-credential failures in a row disable the portal.
   _Note from T1.07:_ Handle `VaultRead.Unreadable` (ask the user to re-enter) differently from `VaultException` (retry later); never count either as a bad-credential login failure.
   _Done when:_ a second run reuses the session without touching credentials.
@@ -407,6 +410,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ a user applies to three approved jobs in one session.
 
 - [ ] **T3.24 Build the generic browser agent (Beta)** (P1) · Depends on T3.07, T1.12, T1.14
+  _Note from T3.07:_ `BridgeCommand.Snapshot` is the simplified DOM: visible fields, buttons and links with a selector each, secrets as `{{password}}`, values capped, the URL without its query.
   Simplified DOM snapshot (password fields as `{{password}}`), one action per step as structured output, Kotlin validation of every action, placeholder substitution only at execution, a 40-step cap, its own daily budget, and no final submit.
   _Done when:_ it fills a form on a test custom portal and stops at "ready for user".
 

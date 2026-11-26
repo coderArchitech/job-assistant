@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Hostile page</title></head>
+<body>
+<p>A page from another origin that tries to reach the app's bridge.</p>
+<script>
+  // Every way this page could find a message channel the app installed: any window property with postMessage
+  // that is not a window, here or in the parent.
+  function channels(win) {
+    var found = [];
+    try {
+      Object.getOwnPropertyNames(win).forEach(function (key) {
+        try {
+          var value = win[key];
+          if (value && value !== win && typeof value.postMessage === "function" && !("document" in value)) {
+            found.push(key);
+            // Try to talk to it anyway, as a forged page would.
+            value.postMessage(JSON.stringify({ type: "ready", url: location.href, token: "guess" }));
+          }
+        } catch (ignored) { /* Cross-origin or getter that throws. */ }
+      });
+    } catch (ignored) { /* The parent is cross-origin. */ }
+    return found;
+  }
+
+  var parentReadable = false;
+  try { parentReadable = !!window.parent.document; } catch (e) { parentReadable = false; }
+
+  var report = {
+    own: channels(window),
+    parent: window.parent !== window ? channels(window.parent) : [],
+    parentReadable: window.parent !== window && parentReadable
+  };
+  window.hostileReport = report;
+  if (window.parent !== window) window.parent.postMessage(report, "*");
+</script>
+</body>
+</html>
