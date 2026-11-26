@@ -10,6 +10,8 @@ dependencies {
     // Sources receive an OkHttpClient and the shared Json from :core:network.
     api(projects.core.network)
     implementation(libs.kotlinx.coroutines.core)
+    // HTML descriptions to plain text in the normalizer.
+    implementation(libs.jsoup)
 
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
