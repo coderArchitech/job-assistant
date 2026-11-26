@@ -17,6 +17,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.File
 import java.io.IOException
 import java.time.Instant
 
@@ -127,24 +128,103 @@ class WeWorkRemotelySourceTest {
     @Test
     fun anExternalEntityIsNeverRead() =
         runTest {
+            val secret = File.createTempFile("wwr-secret", ".txt").apply { writeText("TOP-SECRET-VALUE") }
+            try {
+                reply(
+                    """<?xml version="1.0"?><!DOCTYPE rss [<!ENTITY x SYSTEM "${secret.toURI()}">]>
+                    <rss><channel><item><title>Co: Job &x;</title>
+                    <link>https://weworkremotely.com/remote-jobs/x</link>
+                    <description>&x;</description></item></channel></rss>""",
+                )
+
+                val postings =
+                    try {
+                        source().fetch(null, preset)
+                    } catch (
+                        @Suppress("SwallowedException") refused: IOException,
+                    ) {
+                        // Refusing the document is just as safe.
+                        emptyList()
+                    }
+
+                assertTrue(
+                    postings.none {
+                        it.title.contains("TOP-SECRET") ||
+                            it.description.orEmpty().contains("TOP-SECRET")
+                    },
+                )
+            } finally {
+                secret.delete()
+            }
+        }
+
+    @Test
+    fun oneSloppyItemDoesNotLoseTheFeed() =
+        runTest {
             reply(
-                """<?xml version="1.0"?><!DOCTYPE rss [<!ENTITY x SYSTEM "file:///etc/passwd">]>
-                <rss><channel><item><title>Co: &x;</title><link>https://weworkremotely.com/remote-jobs/x</link></item>
-                </channel></rss>""",
+                feed(
+                    "<item><title>Caf&eacute; Co: Dev&nbsp;Lead</title>" +
+                        "<link>https://weworkremotely.com/remote-jobs/a</link>" +
+                        "<description><p>Raw <b>HTML</b> inside</p></description></item>",
+                    "<item><title>Good Co: Android Engineer</title>" +
+                        "<link>https://weworkremotely.com/remote-jobs/b</link>" +
+                        "<image><title>Logo</title><link>https://cdn.test/logo.png</link></image></item>",
+                ),
             )
 
-            try {
-                val postings = source().fetch(null, preset)
-                assertTrue(postings.none { it.title.contains("root:") })
-            } catch (expected: IOException) {
-                // Refusing the document is just as safe.
-            }
+            val postings = source().fetch(null, preset)
+
+            val good = postings.single { it.company == "Good Co" }
+            assertEquals("a nested <title> never replaces the item's own", "Android Engineer", good.title)
+            assertEquals("https://weworkremotely.com/remote-jobs/b", good.url)
+            assertEquals("the item with undeclared entities and raw HTML is kept too", 2, postings.size)
+            assertTrue(
+                postings
+                    .first()
+                    .description
+                    .orEmpty()
+                    .contains("Raw"),
+            )
+        }
+
+    @Test
+    fun datesInOtherRfc822FormsAreRead() =
+        runTest {
+            reply(
+                feed(
+                    "<item><title>A: Utc</title><link>https://weworkremotely.com/remote-jobs/a</link>" +
+                        "<pubDate>Wed, 25 Nov 2026 18:31:11 UTC</pubDate></item>",
+                    "<item><title>B: Wrong weekday</title><link>https://weworkremotely.com/remote-jobs/b</link>" +
+                        "<pubDate>Mon, 25 Nov 2026 18:31:11 +0000</pubDate></item>",
+                ),
+            )
+
+            val postings = source().fetch(null, preset)
+
+            assertEquals(listOf(Instant.parse("2026-11-25T18:31:11Z")), postings.map { it.postedAt }.distinct())
+        }
+
+    @Test
+    fun aCountryLimitIsPartOfTheLocation() =
+        runTest {
+            reply(
+                feed(
+                    "<item><title>A: Designer</title><link>https://weworkremotely.com/remote-jobs/a</link>" +
+                        "<region>Anywhere in the World</region>" +
+                        "<country>\uD83C\uDDFA\uD83C\uDDF8 United States of America</country>" +
+                        "<state></state></item>",
+                ),
+            )
+
+            val posting = source().fetch(null, preset).single()
+
+            assertEquals("Anywhere in the World; United States of America", posting.location)
         }
 
     @Test
     fun aFailedFetchThrows() =
         runTest {
-            for (code in listOf(403, 404, 500)) {
+            for (code in listOf(401, 403, 404, 429, 500, 503)) {
                 reply("nope", code)
                 try {
                     source().fetch(null, preset)
