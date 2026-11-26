@@ -8,6 +8,9 @@ plugins {
 /** Config host URL for a flavor from gradle.properties, quoted for `buildConfigField`. */
 fun configHost(flavor: String): String = "\"${providers.gradleProperty("jobassistant.configHost.$flavor").get()}\""
 
+/** The config host's signing public keys for a flavor (D07), quoted for `buildConfigField`. */
+fun configKeys(flavor: String): String = "\"${providers.gradleProperty("jobassistant.configKeys.$flavor").get()}\""
+
 /**
  * Release signing with the Play upload key (task T0.07). Each value comes from an environment
  * variable (CI) or from a Gradle property in the developer's own ~/.gradle/gradle.properties.
@@ -79,10 +82,12 @@ android {
             versionNameSuffix = "-dev"
             // Its launcher label is "Job Assistant Dev" (src/dev/res), so the two installs can be told apart.
             buildConfigField("String", "CONFIG_HOST", configHost("dev"))
+            buildConfigField("String", "CONFIG_KEYS", configKeys("dev"))
         }
         create("prod") {
             dimension = "environment"
             buildConfigField("String", "CONFIG_HOST", configHost("prod"))
+            buildConfigField("String", "CONFIG_KEYS", configKeys("prod"))
         }
     }
 }
@@ -91,6 +96,9 @@ dependencies {
     implementation(projects.core.ui)
     implementation(projects.core.data)
     implementation(projects.core.network)
+    // The signed price table prices AI calls (T3.09).
+    implementation(projects.core.config)
+    implementation(projects.ai)
     // Redacting log tree; allowed since T1.08 keeps vault.pb out of backups.
     implementation(projects.core.security)
     implementation(projects.work)

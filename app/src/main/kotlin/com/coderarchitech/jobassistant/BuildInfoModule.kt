@@ -16,7 +16,13 @@ object BuildInfoModule {
     fun provideBuildInfo(): BuildInfo =
         BuildInfo(
             versionName = BuildConfig.VERSION_NAME,
+            versionCode = BuildConfig.VERSION_CODE,
             flavor = BuildConfig.FLAVOR,
             configHost = BuildConfig.CONFIG_HOST,
+            configKeys =
+                BuildConfig.CONFIG_KEYS
+                    .split(',')
+                    .map(String::trim)
+                    .filter(String::isNotEmpty),
         )
 }

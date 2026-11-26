@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Bridge test form</title></head>
+<body>
+<h1 id="title">Apply for Android Engineer</h1>
+<label for="name">Full name</label> <input id="name" name="name">
+<label for="password">Password</label> <input id="password" type="password">
+<button id="show" type="button">Show password</button>
+<label for="otp">Code</label> <input id="otp" autocomplete="one-time-code">
+<select id="city"><option value="">Choose</option><option value="blr">Bengaluru</option><option value="pune">Pune</option></select>
+<input id="cv" type="file">
+<button id="submit" type="button">Send</button>
+<button id="hidden" type="button" style="display:none">Hidden</button>
+<p id="out"></p>
+<p id="file-out"></p>
+<!-- A frame from another origin, as an ad or a hostile widget would be. -->
+<iframe src="https://hostile.example/assets/bridge/hostile.html"></iframe>
+<script>
+  document.getElementById("submit").addEventListener("click", function () {
+    document.getElementById("out").textContent = [
+      document.getElementById("name").value,
+      document.getElementById("city").value,
+      document.getElementById("password").value.length
+    ].join("|");
+  });
+  document.getElementById("show").addEventListener("click", function () {
+    document.getElementById("password").type = "text";
+  });
+  document.getElementById("cv").addEventListener("change", function (event) {
+    var file = event.target.files[0];
+    document.getElementById("file-out").textContent = file.name + ":" + file.size + ":" + file.type;
+  });
+  setTimeout(function () {
+    var late = document.createElement("p");
+    late.id = "late";
+    late.textContent = "Loaded later";
+    document.body.appendChild(late);
+  }, 600);
+  window.addEventListener("message", function (event) {
+    if (event.origin === "https://hostile.example") window.hostileReport = event.data;
+  });
+</script>
+</body>
+</html>
