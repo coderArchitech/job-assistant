@@ -187,7 +187,12 @@ class AgentWebView(
             val decision = if (request.isForMainFrame) policy.decide(url) else NavigationDecision.ALLOW
             if (decision != NavigationDecision.ALLOW) stopped(url, decision)
             val refuse = decision != NavigationDecision.ALLOW || policy.isBlockedHost(url)
-            return if (refuse) refused() else requestInterceptor?.intercept(request)
+            return when {
+                // 204 No Content: the browser stays on the current page instead of showing a refusal.
+                decision != NavigationDecision.ALLOW -> refused(HTTP_NO_CONTENT)
+                refuse -> refused()
+                else -> requestInterceptor?.intercept(request)
+            }
         }
 
         /** A backstop for any navigation that reached the page without passing the checks above. */
@@ -235,6 +240,7 @@ class AgentWebView(
 
     private companion object {
         const val HTTP_FORBIDDEN = 403
+        const val HTTP_NO_CONTENT = 204
 
         @Suppress("DEPRECATION") // The file-URL settings are deprecated but still honoured; set them anyway.
         fun harden(settings: WebSettings) =
@@ -254,12 +260,12 @@ class AgentWebView(
                 saveFormData = false
             }
 
-        fun refused() =
+        fun refused(status: Int = HTTP_FORBIDDEN) =
             WebResourceResponse(
                 "text/plain",
                 "utf-8",
-                HTTP_FORBIDDEN,
-                "Blocked by the app",
+                status,
+                if (status == HTTP_NO_CONTENT) "No Content" else "Blocked by the app",
                 emptyMap(),
                 ByteArrayInputStream(ByteArray(0)),
             )

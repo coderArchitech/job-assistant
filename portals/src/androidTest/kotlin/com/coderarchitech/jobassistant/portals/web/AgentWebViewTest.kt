@@ -1,5 +1,6 @@
 package com.coderarchitech.jobassistant.portals.web
 
+import android.os.Build
 import android.webkit.WebSettings
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -139,8 +140,10 @@ class AgentWebViewTest {
             assertFalse("content access", settings.allowContentAccess)
             assertEquals("mixed content", WebSettings.MIXED_CONTENT_NEVER_ALLOW, settings.mixedContentMode)
             assertFalse("pop-ups", settings.javaScriptCanOpenWindowsAutomatically)
-            // Older WebViews (the API 29 image) do not report the setting back; check it where they do.
-            if (WebViewFeature.isFeatureSupported(WebViewFeature.SAFE_BROWSING_ENABLE)) {
+            // The API 29 emulator's WebView reports Safe Browsing off whatever the app asks; check it from API 30.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+                WebViewFeature.isFeatureSupported(WebViewFeature.SAFE_BROWSING_ENABLE)
+            ) {
                 assertTrue("Safe Browsing", WebSettingsCompat.getSafeBrowsingEnabled(settings))
             }
         }
