@@ -190,7 +190,7 @@ class HardFiltersTest {
             row("Engineering Manager - EU", "Remote - European Union", REMOTE, "European Union only", REGION),
             row("Mid Market Account Executive - EMEA (French Speaking)", "France", REMOTE, "France only", REGION),
             row("Senior Product Designer", "Remote - US", REMOTE, "US only", REGION),
-            row("Designer", "Remote", HYBRID, null, LOCATION),
+            row("Designer", "Remote", HYBRID, null, null),
             row("Abuse Investigator", "Seattle, San Francisco, New York City", UNKNOWN, null, null),
             row("Platform engineer", "Remote", REMOTE, null, null),
             row("Assistant Manager - Internal Audit", "Bengaluru-VTP, India", UNKNOWN, null, null),
@@ -296,8 +296,13 @@ class HardFiltersTest {
             filters.check(job("Engineer", "Bangalore, Karnataka", HYBRID, null), indiaProfile),
         )
         assertEquals(
-            "Location: Pune, India",
-            (filters.check(job("Engineer", "Pune, India", HYBRID, null), indiaProfile) as HardFilterResult.Fail).rule,
+            "Location: Seattle, WA, United States",
+            (
+                filters.check(
+                    job("Engineer", "Seattle, WA, United States", HYBRID, null),
+                    indiaProfile,
+                ) as HardFilterResult.Fail
+            ).rule,
         )
     }
 
@@ -330,6 +335,113 @@ class HardFiltersTest {
             "a user whose country is unknown passes",
             HardFilterResult.Pass,
             filters.check(authorized, profile(Preferences())),
+        )
+    }
+
+    private fun failsFor(
+        job: Job,
+        profile: Profile,
+    ) = filters.check(job, profile) is HardFilterResult.Fail
+
+    @Test
+    fun falseRejectionsTheReviewFound() {
+        val usUser = profile(Preferences(locations = listOf("San Jose, CA")))
+        val indianaUser =
+            profile(Preferences(locations = listOf("Indianapolis, IN"), timeZones = listOf("America/New_York")))
+        val twoCountries = profile(Preferences(locations = listOf("Bengaluru, India", "Singapore")))
+        val ukUser = profile(Preferences(locations = listOf("London, United Kingdom")))
+        val mid = profile(Preferences(seniority = Seniority.MID))
+        val junior = profile(Preferences(seniority = Seniority.JUNIOR))
+
+        assertTrue("CA is a state, not Canada", !failsFor(job("Engineer", "US", REMOTE, "US only"), usUser))
+        assertTrue("IN is a state, not India", !failsFor(job("Engineer", "US", REMOTE, "US only"), indianaUser))
+        assertTrue(
+            "a city in the user's country",
+            !failsFor(job("Engineer", "Bengaluru", REMOTE, "Bengaluru only"), indiaProfile),
+        )
+        assertTrue(
+            "an unknown place is not a rejection",
+            !failsFor(job("Engineer", "Remote - TX", REMOTE, "TX only"), indiaProfile),
+        )
+        assertTrue(
+            "every listed country counts",
+            !failsFor(job("Engineer", "Singapore", REMOTE, "Singapore only"), twoCountries),
+        )
+        assertTrue("the UK is in Europe", !failsFor(job("Account Executive", "Europe", REMOTE, "Europe only"), ukUser))
+        for (title in listOf(
+            "Product Manager",
+            "Senior Product Manager",
+            "Associate Product Manager",
+            "Account Manager",
+        )) {
+            assertTrue(title, !failsFor(job(title, "", REMOTE, null), mid))
+        }
+        for (title in listOf("Research Fellow", "Staff Accountant", "Staff Nurse")) {
+            assertTrue(title, !failsFor(job(title, "", REMOTE, null), junior))
+        }
+        assertTrue("Staff Engineer is still a level", failsFor(job("Staff Engineer", "", REMOTE, null), junior))
+    }
+
+    @Test
+    fun officesAndDealBreakersDoNotRejectGoodJobs() {
+        assertTrue(
+            "a city in the user's own country is not another office",
+            !failsFor(job("Engineer", "Pune, India", HYBRID, null), indiaProfile),
+        )
+        assertTrue(
+            "an office abroad is",
+            failsFor(job("Engineer", "Seattle, WA, United States", HYBRID, null), indiaProfile),
+        )
+        val agencyProfile =
+            profile(
+                Preferences(),
+                dealBreakers = DealBreakers(companyTypes = listOf("agency"), industries = listOf("crypto")),
+            )
+        assertTrue(
+            "a negated mention is not a match",
+            !failsFor(
+                job("Engineer", "", REMOTE, null, description = "No crypto experience needed. We are not an agency."),
+                agencyProfile,
+            ),
+        )
+        assertTrue(
+            "boilerplate at the end is not read",
+            !failsFor(
+                job(
+                    "Engineer",
+                    "",
+                    REMOTE,
+                    null,
+                    description =
+                        "x".repeat(2_000) + " Recruitment agency resumes welcome",
+                ),
+                agencyProfile,
+            ),
+        )
+    }
+
+    @Test
+    fun experienceCountsEveryMonthButNotUnknownRoles() {
+        val sixYears =
+            profile(
+                Preferences(),
+                experience = listOf(Role("A", "Engineer", YearMonth.of(2020, 12), YearMonth.of(2026, 11))),
+            )
+        val undated =
+            profile(
+                Preferences(),
+                experience = listOf(Role("A", "Engineer", YearMonth.of(2024, 11), null), Role("B", "Engineer")),
+            )
+
+        assertEquals(
+            "six full years is senior, so Staff is one step",
+            HardFilterResult.Pass,
+            filters.check(job("Staff Engineer", "", REMOTE, null), sixYears),
+        )
+        assertEquals(
+            "a role without dates makes the years unknown",
+            HardFilterResult.Pass,
+            filters.check(job("Senior Engineer", "", REMOTE, null), undated),
         )
     }
 

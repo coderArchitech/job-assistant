@@ -10,6 +10,8 @@ import com.coderarchitech.jobassistant.core.model.WorkMode
 import com.coderarchitech.jobassistant.core.model.WorkModePreference
 import java.time.Clock
 import java.time.YearMonth
+import java.util.Locale
+import kotlin.math.abs
 
 /** What the hard filters decided for one job. */
 sealed interface HardFilterResult {
@@ -25,7 +27,8 @@ sealed interface HardFilterResult {
 /**
  * The first layer of scoring (design, Matching and scoring): rules with no AI, cheapest first. A job that
  * fails gets score 0 and the rule's name as its reason. A rule never fails on missing information: an
- * unknown work mode, a title with no seniority word or a user whose country is unknown passes that rule.
+ * unknown work mode, a title with no seniority word, a place this app does not know or a user whose country is
+ * unknown passes that rule, because rejecting a good job is worse than scoring a poor one.
  */
 class HardFilters(
     private val clock: Clock = Clock.systemUTC(),
@@ -35,15 +38,17 @@ class HardFilters(
         job: Job,
         profile: Profile,
     ): HardFilterResult {
-        val text = listOf(job.title, job.company, job.description).joinToString("\n")
+        // The end of a description is mostly boilerplate ("we do not accept resumes from agencies").
+        val text = listOf(job.title, job.company, job.description.take(DEAL_BREAKER_TEXT)).joinToString("\n")
+        val countries = Places.countriesOf(profile.preferences.locations, profile.preferences.timeZones)
         val rule =
             dealBreaker("Deal-breaker", profile.dealBreakers.keywords, text)
                 ?: dealBreaker("Deal-breaker industry", profile.dealBreakers.industries, text)
                 ?: dealBreaker("Deal-breaker company type", profile.dealBreakers.companyTypes, text)
                 ?: seniority(job, profile)
                 ?: workMode(job, profile)
-                ?: officeLocation(job, profile)
-                ?: region(job, profile)
+                ?: officeCountry(job, countries)
+                ?: region(job, countries)
         return rule?.let { HardFilterResult.Fail(it.take(MatchResult.MAX_REASON_LENGTH)) } ?: HardFilterResult.Pass
     }
 
@@ -67,6 +72,7 @@ class HardFilters(
             scoredAt = clock.instant(),
         )
 
+    /** The first term found as a whole word and not negated (`no crypto experience needed` is no match). */
     private fun dealBreaker(
         label: String,
         terms: List<String>,
@@ -74,8 +80,13 @@ class HardFilters(
     ): String? =
         terms
             .map { it.trim() }
-            .firstOrNull { term -> term.isNotEmpty() && wholeWord(term).containsMatchIn(text) }
-            ?.let { "$label: $it" }
+            .filter { it.isNotEmpty() }
+            .firstOrNull { term ->
+                wholeWord(term).findAll(text).any { match ->
+                    val before = text.substring(maxOf(0, match.range.first - NEGATION_WINDOW), match.range.first)
+                    !NEGATION.containsMatchIn(before.substringAfterLast('.').substringAfterLast('\n'))
+                }
+            }?.let { "$label: $it" }
 
     /** A title two or more steps from the user's level, such as Intern or Director for a 6-year engineer. */
     private fun seniority(
@@ -84,12 +95,18 @@ class HardFilters(
     ): String? {
         val titleLevel = Seniorities.fromTitle(job.title)
         val userLevel = profile.preferences.seniority ?: Seniorities.fromYears(experienceYears(profile))
-        if (titleLevel == null || userLevel == null) return null
-        val apart = kotlin.math.abs(Seniorities.rank(titleLevel) - Seniorities.rank(userLevel))
+        val apart =
+            if (titleLevel == null ||
+                userLevel == null
+            ) {
+                0
+            } else {
+                abs(Seniorities.rank(titleLevel) - Seniorities.rank(userLevel))
+            }
         return if (apart >=
             SENIORITY_GAP
         ) {
-            "Seniority: ${titleLevel.label()} role, ${userLevel.label()} profile"
+            "Seniority: ${titleLevel?.label()} role, ${userLevel?.label()} profile"
         } else {
             null
         }
@@ -98,79 +115,66 @@ class HardFilters(
     private fun workMode(
         job: Job,
         profile: Profile,
-    ): String? =
-        when (profile.preferences.workMode) {
-            WorkModePreference.REMOTE_ONLY ->
-                "Work mode: ${job.workMode.label()}, remote only wanted".takeIf {
-                    job.workMode in
-                        setOf(WorkMode.HYBRID, WorkMode.ONSITE)
-                }
-            WorkModePreference.REMOTE_OR_HYBRID ->
-                "Work mode: on-site, remote or hybrid wanted".takeIf { job.workMode == WorkMode.ONSITE }
-            WorkModePreference.ANY -> null
-        }
-
-    /** An on-site or hybrid job must be somewhere the user named, when they named anywhere. */
-    private fun officeLocation(
-        job: Job,
-        profile: Profile,
     ): String? {
-        val wanted =
-            profile.preferences.locations.map { it.substringBefore(',').trim() }.filter {
-                it.isNotEmpty() &&
-                    !it.equals("remote", true)
+        val fails =
+            when (profile.preferences.workMode) {
+                WorkModePreference.REMOTE_ONLY -> job.workMode == WorkMode.HYBRID || job.workMode == WorkMode.ONSITE
+                WorkModePreference.REMOTE_OR_HYBRID -> job.workMode == WorkMode.ONSITE
+                WorkModePreference.ANY -> false
             }
+        val wanted = profile.preferences.workMode.label()
+        return if (fails) "Work mode: ${job.workMode.label()} role, $wanted wanted" else null
+    }
+
+    /**
+     * An on-site or hybrid job in another country (`Seattle, WA` for a user in India). A city in the user's own
+     * country passes, since the user may move within it; an unknown place passes too.
+     */
+    private fun officeCountry(
+        job: Job,
+        countries: Set<String>,
+    ): String? {
         val inOffice = job.workMode == WorkMode.ONSITE || job.workMode == WorkMode.HYBRID
-        if (!inOffice || wanted.isEmpty() || job.location.isBlank()) return null
-        val matches =
-            wanted.any { place ->
-                CITY_ALIASES[place.lowercase()]
-                    .orEmpty()
-                    .plus(
-                        place,
-                    ).any { wholeWord(it).containsMatchIn(job.location) }
-            }
-        return if (matches) null else "Location: ${job.location}"
+        val named = if (inOffice && countries.isNotEmpty()) Places.countriesNamedIn(job.location) else emptySet()
+        return if (named.isNotEmpty() && named.none { it in countries }) "Location: ${job.location}" else null
     }
 
     /** A limit such as `US only` or `Must be authorized to work in United States` that leaves the user out. */
     private fun region(
         job: Job,
-        profile: Profile,
+        countries: Set<String>,
     ): String? {
-        val limits =
+        if (countries.isEmpty()) return null
+        val failed =
             job.regionRestriction
                 ?.split(';')
                 ?.map { it.trim() }
-                ?.filter { it.isNotEmpty() }
-                .orEmpty()
-        val country = Places.countryOf(profile.preferences.locations, profile.preferences.timeZones)
-        val failed =
-            limits.firstOrNull { limit ->
-                val places =
-                    when {
-                        limit.endsWith(" only", ignoreCase = true) -> limit.dropLast(" only".length)
-                        limit.startsWith(AUTHORIZED, ignoreCase = true) -> limit.drop(AUTHORIZED.length)
-                        else -> null
-                    }
-                country != null && places != null && !Places.includes(places, country)
-            }
+                ?.firstOrNull { limit ->
+                    val places =
+                        when {
+                            limit.endsWith(ONLY, ignoreCase = true) -> limit.dropLast(ONLY.length)
+                            limit.startsWith(AUTHORIZED, ignoreCase = true) -> limit.drop(AUTHORIZED.length)
+                            else -> null
+                        }
+                    places != null && Places.includes(places, countries) == false
+                }
         return failed?.let { "$REGION: $it" }
     }
 
     /**
-     * Years of experience from the roles with a start date, counting months once where roles overlap, or
-     * null when no role has one.
+     * Years of experience, counting each month once where roles overlap and the last month of a role too.
+     * Null when any role has no start date, since the total would then be too low and reject senior titles.
      */
     private fun experienceYears(profile: Profile): Double? {
+        if (profile.experience.isEmpty() || profile.experience.any { it.start == null }) return null
         val now = YearMonth.now(clock)
         val months =
             profile.experience
-                .mapNotNull { role -> role.start?.let { start -> start to minOf(role.end ?: now, now) } }
-                .flatMap { (start, end) ->
-                    generateSequence(start) { it.plusMonths(1) }.takeWhile { it < end }.toList()
+                .flatMap { role ->
+                    val end = minOf(role.end ?: now, now)
+                    generateSequence(role.start) { it.plusMonths(1) }.takeWhile { it <= end }.toList()
                 }.toSet()
-        return if (profile.experience.none { it.start != null }) null else months.size / MONTHS_PER_YEAR
+        return months.size / MONTHS_PER_YEAR
     }
 
     private fun wholeWord(term: String) =
@@ -178,24 +182,23 @@ class HardFilters(
 
     private companion object {
         const val REGION = "Region"
+        const val ONLY = " only"
         const val AUTHORIZED = "Must be authorized to work in "
         const val SENIORITY_GAP = 2
         const val MONTHS_PER_YEAR = 12.0
-
-        /** Indian cities written two ways on job boards. */
-        val CITY_ALIASES =
-            mapOf(
-                "bengaluru" to listOf("bangalore"),
-                "bangalore" to listOf("bengaluru"),
-                "gurugram" to listOf("gurgaon"),
-                "gurgaon" to listOf("gurugram"),
-                "mumbai" to listOf("bombay"),
-                "chennai" to listOf("madras"),
-                "kolkata" to listOf("calcutta"),
-            )
+        const val DEAL_BREAKER_TEXT = 1_500
+        const val NEGATION_WINDOW = 40
+        val NEGATION = Regex("\\b(no|not|non|never|without|nor|don't|doesn't|isn't)\\b", RegexOption.IGNORE_CASE)
     }
 }
 
-private fun WorkMode.label() = name.lowercase(java.util.Locale.ROOT).replace("onsite", "on-site")
+private fun WorkMode.label() = name.lowercase(Locale.ROOT).replace("onsite", "on-site")
 
-private fun Seniority.label() = name.lowercase(java.util.Locale.ROOT).replaceFirstChar { it.uppercase() }
+private fun WorkModePreference.label() =
+    when (this) {
+        WorkModePreference.REMOTE_ONLY -> "remote only"
+        WorkModePreference.REMOTE_OR_HYBRID -> "remote or hybrid"
+        WorkModePreference.ANY -> "any"
+    }
+
+private fun Seniority.label() = name.lowercase(Locale.ROOT).replaceFirstChar { it.uppercase() }

@@ -7,13 +7,25 @@ internal object Seniorities {
     private fun words(vararg w: String) =
         Regex("(?<![\\p{L}])(${w.joinToString("|")})(?![\\p{L}])", RegexOption.IGNORE_CASE)
 
-    // Most senior first, so "Senior Director" is a director and "Senior Staff" is staff.
+    /** The disciplines where "Staff" names a level, as in Staff Engineer; a Staff Accountant is not one. */
+    private const val STAFF_ROLES =
+        "(engineer|software|developer|scientist|designer|data|ml|machine|security|site|backend|frontend|" +
+            "mobile|android|ios|product|platform|infrastructure|research engineer)"
+
+    // Most senior first, so "Senior Director" is a director and "Senior Staff" is staff. A bare "Manager"
+    // (Product, Project, Account Manager) is a role, not a level, so only a manager of engineers counts.
     private val TITLE_WORDS =
         listOf(
             Seniority.DIRECTOR to words("director", "vp", "vice president", "head of", "chief", "cto", "ceo", "cfo"),
-            Seniority.PRINCIPAL to words("principal", "distinguished", "fellow"),
-            Seniority.STAFF to words("staff"),
-            Seniority.MANAGER to words("manager", "engineering manager", "mgr"),
+            Seniority.PRINCIPAL to words("principal", "distinguished engineer"),
+            Seniority.STAFF to words("staff $STAFF_ROLES"),
+            Seniority.MANAGER to
+                words(
+                    "engineering manager",
+                    "manager, engineering",
+                    "software development manager",
+                    "development manager",
+                ),
             Seniority.SENIOR to words("senior", "sr", "snr", "lead"),
             Seniority.INTERN to words("intern", "internship", "trainee", "apprentice"),
             Seniority.JUNIOR to words("junior", "jr", "entry level", "entry-level", "graduate", "fresher", "associate"),
