@@ -240,7 +240,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 ### Scoring
 
-- [ ] **T2.14 Implement hard filters** (P0) · Depends on T2.10
+- [x] **T2.14 Implement hard filters** (P0) · Depends on T2.10 · [#38](https://github.com/coderArchitech/job-assistant/pull/38)
   Deal-breakers, seniority from the title, work mode, and region or authorization limits. A failed job gets score 0 and the rule's name as its reason.
   _Done when:_ a labeled set shows every "remote, US only" posting filtered for an India-based profile.
 
