@@ -17,3 +17,7 @@ keystore.properties
 
 # Node (Playwright adapter tests)
 node_modules/
+
+# JVM crash reports from failed Gradle or Kotlin daemons.
+hs_err_pid*.log
+replay_pid*.log

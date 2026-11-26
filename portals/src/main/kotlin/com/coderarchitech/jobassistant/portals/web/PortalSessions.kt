@@ -14,7 +14,7 @@ import kotlin.coroutines.resume
  * Keeps each portal's sign-in apart (design, WebView runtime; task T3.08).
  *
  * Where the WebView supports it, every portal gets its own profile from `ProfileStore`, with its own cookies,
- * storage and cache, so wiping one portal deletes its profile and touches nothing else. This is the real
+ * storage and cache, so wiping one portal empties its profile and touches nothing else. This is the real
  * isolation.
  *
  * Older WebViews have one cookie jar for the whole app. There a wipe expires the cookies sent to the portal's own
@@ -46,7 +46,7 @@ class PortalSessions(
         if (isolated) WebViewCompat.setProfile(webView, portal.profileName)
     }
 
-    /** The cookie jar [portal]'s pages use, or null when its profile does not exist (never signed in, or wiped). */
+    /** The cookie jar [portal]'s pages use, or null when its profile does not exist yet (never opened). */
     @SuppressLint("RequiresFeature")
     fun cookiesOf(portal: PortalSession): CookieManager? =
         if (isolated) {
@@ -62,22 +62,16 @@ class PortalSessions(
     /** Signs [portal] out by removing what it stored, leaving every other portal signed in. */
     suspend fun wipe(portal: PortalSession) = if (isolated) wipeProfile(portal) else wipeSharedJar(portal)
 
+    /**
+     * Empties the portal's profile in place rather than deleting it: the WebView hands out a dead object for a
+     * deleted profile, which crashes the next use, and an empty profile is signed out all the same.
+     */
     @SuppressLint("RequiresFeature")
-    @Suppress("SwallowedException") // An in-use profile is emptied instead, which is the point of catching it.
     private suspend fun wipeProfile(portal: PortalSession) {
-        val store = ProfileStore.getInstance()
-        val profile = store.getProfile(portal.profileName) ?: return
-        val deleted =
-            try {
-                store.deleteProfile(portal.profileName)
-            } catch (inUse: IllegalStateException) {
-                false
-            }
-        if (!deleted) {
-            profile.cookieManager.removeAll()
-            profile.cookieManager.flush()
-            profile.webStorage.deleteAllData()
-        }
+        val profile = ProfileStore.getInstance().getProfile(portal.profileName) ?: return
+        profile.cookieManager.removeAll()
+        profile.cookieManager.flush()
+        profile.webStorage.deleteAllData()
     }
 
     private fun wipeSharedJar(portal: PortalSession) {

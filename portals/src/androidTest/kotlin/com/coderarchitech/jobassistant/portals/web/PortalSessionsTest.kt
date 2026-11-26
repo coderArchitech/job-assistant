@@ -10,7 +10,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.junit.After
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -34,8 +33,16 @@ class PortalSessionsTest {
     fun signOutEverywhere() =
         onMain {
             CookieManager.getInstance().removeAllCookies(null)
+            // Profiles are emptied, never deleted: the WebView crashes on a deleted profile's object.
             if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
-                portals.forEach { runCatching { ProfileStore.getInstance().deleteProfile(it.profileName) } }
+                portals.forEach {
+                    ProfileStore
+                        .getInstance()
+                        .getProfile(
+                            it.profileName,
+                        )?.cookieManager
+                        ?.removeAllCookies(null)
+                }
             }
         }
 
@@ -86,11 +93,10 @@ class PortalSessionsTest {
         assertTrue(sessions.isolated)
 
         assertWipingOneKeepsTheOther(sessions)
-        assertEquals("a wiped profile is not recreated by reading it", null, onMain { sessions.cookiesOf(naukri) })
     }
 
     @Test
-    fun withProfilesAPortalStillOpenIsEmptiedRatherThanLeftSignedIn() {
+    fun withProfilesAPortalStillOpenIsSignedOutToo() {
         assumeTrue(WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE))
         val sessions = PortalSessions(portals)
         val view =
