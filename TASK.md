@@ -165,6 +165,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ three sample resumes produce profiles a user can confirm without retyping more than one field each.
 
 - [ ] **T1.17 Build the app shell and onboarding skeleton** (P0) · Depends on T0.03, T1.06, T1.12, T1.13
+  _Note from T2.09:_ `MainActivity` switches between Home and `WatchlistRoute` with a saved flag until this task's navigation graph replaces it; Home's "Company watchlist" button is the entry point to move into it.
   Navigation graph, bottom navigation (Home, Jobs, Review, Portals, Settings), light and dark themes, and onboarding steps 1–4: consent, resume, preferences and context, AI provider (key entry, "Validate key", model picker per task with defaults). Edge-to-edge insets handled on every screen.
   _Note (owner, 2026-11-18):_ Depends on T1.12 and T1.13 because its Done when validates a real key, which needs a provider.
   _Done when:_ a new install reaches Home after validating a key on either provider.
@@ -213,7 +214,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   Find the monthly thread through the Algolia HN API, fetch its comments, pre-filter with regex (a role keyword and either remote or the user's location, per D10), send at most 100 comments a month to the scoring model, and extract postings with it.
   _Done when:_ one month's thread yields structured postings at a measured, logged cost.
 
-- [ ] **T2.09 Build the company watchlist** (P0) · Depends on T1.03
+- [x] **T2.09 Build the company watchlist** (P0) · Depends on T1.03 · [#42](https://github.com/coderArchitech/job-assistant/pull/42)
   CRUD screen for companies with ATS type and board slug, and a "check board" button that validates the slug.
   _Note from T2.02:_ "Check board" calls `GreenhouseSource(slug, name, client).checkBoard()`, which returns `BoardCheck.Valid(jobCount)`, `NotFound` or `Failed(message)` and never throws. `LeverSource` (T2.03) and `AshbySource` (T2.04) offer the same call. `JobSource` clients are built per watchlist entry with `@HttpClientFor(NetworkGroup.JOB_SOURCES)`.
   _Done when:_ a user adds a Greenhouse, a Lever and an Ashby company and each check passes.

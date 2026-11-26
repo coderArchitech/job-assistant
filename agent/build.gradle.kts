@@ -4,7 +4,8 @@ plugins {
 
 dependencies {
     implementation(projects.ai)
-    implementation(projects.sources)
+    // api: BoardChecker returns the sources' BoardCheck.
+    api(projects.sources)
     implementation(projects.portals)
     implementation(projects.email)
     implementation(projects.otp)
