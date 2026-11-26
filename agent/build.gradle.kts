@@ -9,4 +9,6 @@ dependencies {
     implementation(projects.email)
     implementation(projects.otp)
     implementation(projects.core.data)
+
+    testImplementation(libs.kotlinx.coroutines.test)
 }

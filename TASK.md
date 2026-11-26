@@ -253,14 +253,17 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ the floor is tuned on the golden set (T2.19) and recorded in settings defaults.
 
 - [ ] **T2.17 Implement LLM scoring** (P0) · Depends on T1.12, T1.13, T1.14
+  _Note from T2.18:_ at the start of each run call `ScoringExamples.forNewRun()` once and put the part (when not null) in `LlmRequest.context` after the profile and preset context, for every job in the run.
   The scoring prompt (rubric, profile, context, the last 10 decisions, then the job) with the score JSON schema; tier computed in the app from score and thresholds; score cache keyed on job, profile version, context hash and model.
   _Done when:_ changing a threshold re-tiers stored jobs with no AI calls (BR4).
 
-- [ ] **T2.18 Record decisions as feedback** (P0) · Depends on T1.03
+- [x] **T2.18 Record decisions as feedback** (P0) · Depends on T1.03 · [#39](https://github.com/coderArchitech/job-assistant/pull/39)
   Approve and reject decisions saved as `Decision` rows and used as examples in the next run's scoring prompt.
   _Done when:_ a new run's prompt contains the latest decisions.
+  _Note:_ verified on the examples part the prompt will carry (`ScoringExamplesTest`); the scoring prompt itself is T2.17 and the Review screen that records decisions is T2.22, which use it as their notes say.
 
 - [ ] **T2.19 Build the scoring golden set** (P0) · Depends on T2.17
+  _Note from T2.18:_ the examples block (`ScoringExamples.HEADER` and one line per decision) is part of the scoring prompt, so the golden-set run covers it; CLAUDE.md asks for a golden-set result on prompt changes, and none exists yet.
   About 50 labeled jobs, including the BR5 case ("no service companies"); a script that reports tier agreement and cost per job.
   _Done when:_ the report runs in CI on prompt changes and shows the BR5 case moving as expected.
 
@@ -277,6 +280,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ the High and Partial chips filter correctly (BR4), and Job detail shows `RemoteOkCredit` as a followed link on postings from the `remoteok` source (T2.05) and `RemotiveCredit` on postings from the `remotive` source (T2.06).
 
 - [ ] **T2.22 Build the Review screen** (P0) · Depends on T2.21, T2.18
+  _Note from T2.18:_ approve and reject call `DecisionLog.record(jobId, verdict, reason)` as well as the status move; the reason box is optional and kept to 280 characters.
   Swipe or tap to approve or reject, bulk approve for High match, and a draft preview area (filled by T3.03).
   _Done when:_ approving a job moves it to Approved and records a decision.
 
