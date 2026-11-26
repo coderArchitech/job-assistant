@@ -194,9 +194,10 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   Confirm the posting API endpoint first; include compensation.
   _Done when:_ fixture tests pass and a live fetch of one public board works.
 
-- [ ] **T2.05 Build the RemoteOK client** (P0) · Depends on T2.01
+- [x] **T2.05 Build the RemoteOK client** (P0) · Depends on T2.01 · [#33](https://github.com/coderArchitech/job-assistant/pull/33)
   Skip the legal-notice element; show the required credit and link back in the UI.
   _Done when:_ fixture tests pass, and Job detail shows the source credit.
+  _Note:_ the client and `RemoteOkCredit` (name and link) are done. Job detail does not exist yet, so showing the credit is part of T2.21.
 
 - [ ] **T2.06 Build the Remotive client** (P0) · Depends on T2.01
   Confirm the endpoint and the allowed request rate first; enforce that rate.
@@ -269,7 +270,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 - [ ] **T2.21 Build the Jobs screen** (P0) · Depends on T2.17, T1.17
   Job cards with score, tier, matched and missing skills and reason; filter chips (High, Partial, All, source, work mode, posted date, salary); search; Job detail screen.
-  _Done when:_ the High and Partial chips filter correctly (BR4).
+  _Done when:_ the High and Partial chips filter correctly (BR4), and Job detail shows `RemoteOkCredit` as a followed link on postings from the `remoteok` source (T2.05).
 
 - [ ] **T2.22 Build the Review screen** (P0) · Depends on T2.21, T2.18
   Swipe or tap to approve or reject, bulk approve for High match, and a draft preview area (filled by T3.03).
