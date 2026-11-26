@@ -73,4 +73,28 @@ class RoomDecisionLogTest : DatabaseTest() {
             assertNull("a blank reason is none", db.decisionDao().getLatestForJob(ids[5])!!.reason)
             assertEquals(DecisionLog.MAX_REASON_LENGTH, long.reason!!.length)
         }
+
+    @Test
+    fun aLaterDecisionWinsEvenIfTheClockWentBack() =
+        runBlocking {
+            val job = storeJob("1", "h1")
+            val log = log()
+            log.record(job, Verdict.APPROVE, null)
+            now = now.minusSeconds(3_600)
+            log.record(job, Verdict.REJECT, null)
+
+            assertEquals(Verdict.REJECT, log.latestExamples(1).single().verdict)
+        }
+
+    @Test
+    fun aCutReasonNeverEndsInHalfAnEmoji() =
+        runBlocking {
+            val job = storeJob("1", "h1")
+            val reason = "x".repeat(DecisionLog.MAX_REASON_LENGTH - 1) + "\uD83D\uDE00 and more"
+
+            val stored = log().record(job, Verdict.APPROVE, reason).reason!!
+
+            assertEquals(DecisionLog.MAX_REASON_LENGTH - 1, stored.length)
+            assertEquals(false, Character.isHighSurrogate(stored.last()))
+        }
 }

@@ -8,10 +8,9 @@ import com.coderarchitech.jobassistant.core.data.db.entity.DecisionEntity
 import com.coderarchitech.jobassistant.core.data.db.entity.DraftEntity
 import com.coderarchitech.jobassistant.core.data.db.entity.JobEntity
 import com.coderarchitech.jobassistant.core.data.db.entity.MatchResultEntity
+import com.coderarchitech.jobassistant.core.model.DecisionExample
 import com.coderarchitech.jobassistant.core.model.DraftKind
 import com.coderarchitech.jobassistant.core.model.JobStatus
-import com.coderarchitech.jobassistant.core.model.Verdict
-import com.coderarchitech.jobassistant.core.model.WorkMode
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
 
@@ -173,17 +172,6 @@ interface DraftDao {
     fun observeForJob(jobId: Long): Flow<List<DraftEntity>>
 }
 
-/** A decision joined with the job it was about. */
-data class DecisionWithJob(
-    val verdict: Verdict,
-    val reason: String?,
-    val decidedAt: Instant,
-    val title: String,
-    val company: String,
-    val location: String,
-    val workMode: WorkMode,
-)
-
 /** Reads and writes approve and reject decisions. */
 @Dao
 interface DecisionDao {
@@ -191,29 +179,26 @@ interface DecisionDao {
     @Insert
     suspend fun insert(decision: DecisionEntity): Long
 
-    /** The latest [limit] decisions, newest first; these become examples in scoring prompts. */
-    @Query("SELECT * FROM decision ORDER BY decidedAt DESC, id DESC LIMIT :limit")
-    suspend fun getRecent(limit: Int): List<DecisionEntity>
-
     /**
      * The latest decision on each of the [limit] most recently decided jobs, newest first, with the job's
      * title, company, location and work mode. A job decided twice appears once, with its later decision.
+     * "Later" is insert order (the id), not `decidedAt`, so a clock set back cannot revive an older verdict;
+     * `MAX(id) GROUP BY jobId` reads the `jobId` index, so the cost does not grow with the whole history.
      */
     @Query(
         """
         SELECT d.verdict AS verdict, d.reason AS reason, d.decidedAt AS decidedAt,
                j.title AS title, j.company AS company, j.location AS location, j.workMode AS workMode
-        FROM decision d JOIN job j ON j.id = d.jobId
-        WHERE d.id = (
-            SELECT d2.id FROM decision d2 WHERE d2.jobId = d.jobId ORDER BY d2.decidedAt DESC, d2.id DESC LIMIT 1
-        )
-        ORDER BY d.decidedAt DESC, d.id DESC
+        FROM (SELECT MAX(id) AS id FROM decision GROUP BY jobId) latest
+        JOIN decision d ON d.id = latest.id
+        JOIN job j ON j.id = d.jobId
+        ORDER BY d.id DESC
         LIMIT :limit
         """,
     )
-    suspend fun getLatestWithJobs(limit: Int): List<DecisionWithJob>
+    suspend fun getLatestExamples(limit: Int): List<DecisionExample>
 
     /** The most recent decision for [jobId], or null. */
-    @Query("SELECT * FROM decision WHERE jobId = :jobId ORDER BY decidedAt DESC, id DESC LIMIT 1")
+    @Query("SELECT * FROM decision WHERE jobId = :jobId ORDER BY id DESC LIMIT 1")
     suspend fun getLatestForJob(jobId: Long): DecisionEntity?
 }

@@ -22,15 +22,20 @@ internal class RoomDecisionLog
             verdict: Verdict,
             reason: String?,
         ): Decision {
-            val note = reason?.trim()?.takeIf { it.isNotEmpty() }?.take(DecisionLog.MAX_REASON_LENGTH)
+            val note = reason?.trim()?.takeIf { it.isNotEmpty() }?.cutAt(DecisionLog.MAX_REASON_LENGTH)
             val entity = DecisionEntity(jobId = jobId, verdict = verdict, reason = note, decidedAt = clock.instant())
             return entity.copy(id = dao.insert(entity)).toModel()
         }
 
         override suspend fun latestExamples(limit: Int): List<DecisionExample> {
             require(limit > 0) { "Ask for at least one example" }
-            return dao.getLatestWithJobs(limit).map {
-                DecisionExample(it.verdict, it.reason, it.decidedAt, it.title, it.company, it.location, it.workMode)
-            }
+            return dao.getLatestExamples(limit)
         }
     }
+
+/** At most [max] characters, never ending in half of a surrogate pair (half an emoji). */
+private fun String.cutAt(max: Int): String {
+    if (length <= max) return this
+    val end = if (Character.isHighSurrogate(this[max - 1])) max - 1 else max
+    return substring(0, end)
+}

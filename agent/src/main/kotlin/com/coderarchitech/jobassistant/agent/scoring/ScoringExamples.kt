@@ -30,15 +30,22 @@ class ScoringExamples
             val lines =
                 examples.mapIndexed { i, example ->
                     val reason = example.reason?.let { " Reason: ${quote(it)}." }.orEmpty()
-                    val where =
-                        listOf(
-                            example.location,
-                            example.workMode.label(),
-                        ).filter { it.isNotBlank() }.joinToString(", ")
+                    val where = where(example)
                     "${i + 1}. ${example.verdict.label()}: ${quote(example.title)} at ${quote(example.company)}" +
                         (if (where.isEmpty()) "" else " ($where)") + ".$reason"
                 }
             return Part.Text((listOf(HEADER) + lines).joinToString("\n"))
+        }
+
+        /** The location (quoted, like all job-board text) and the work mode when the location does not say it. */
+        private fun where(example: DecisionExample): String {
+            val location = example.location.takeIf { it.isNotBlank() }?.let(::quote)
+            val mode =
+                example.workMode.label().takeIf {
+                    it.isNotEmpty() &&
+                        !example.location.contains(it, ignoreCase = true)
+                }
+            return listOfNotNull(location, mode).joinToString(", ")
         }
 
         private fun quote(text: String): String = "\"" + text.replace(WHITESPACE, " ").replace("\"", "'").trim() + "\""
