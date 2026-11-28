@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Sample portal: sign in</title></head>
+<body>
+<!-- Signed in: the account marker shows, as a portal's header would. The session is kept in localStorage. -->
+<div id="account" hidden>Signed in</div>
+<form id="form" onsubmit="return false">
+  <input id="user" name="user">
+  <input id="pass" type="password">
+  <button id="signin" type="button">Sign in</button>
+</form>
+<p class="login-error" hidden>Wrong user name or password</p>
+<form id="otp" hidden><input name="code"></form>
+<script>
+  function show(id) { document.querySelector(id).hidden = false; }
+  if (localStorage.getItem("session") === "yes") { show("#account"); document.getElementById("form").hidden = true; }
+  document.getElementById("signin").addEventListener("click", function () {
+    var user = document.getElementById("user").value;
+    var pass = document.getElementById("pass").value;
+    if (user === "otp-user") { show("#otp"); return; }
+    if (user === "asha" && pass === "fake-pass") {
+      localStorage.setItem("session", "yes");
+      document.getElementById("form").hidden = true;
+      show("#account");
+    } else {
+      show(".login-error");
+    }
+  });
+</script>
+</body>
+</html>

@@ -12,6 +12,7 @@
   var post = port.postMessage.bind(port);
   var MAX_TEXT = 500;
   var MAX_ELEMENTS = 200;
+  var MAX_EXTRACT = 20000; // A job description can be long; anything longer is cut.
   var SECRET_AUTOCOMPLETE = /(^|\s)(current-password|new-password|one-time-code)(\s|$)/;
   var secrets = new WeakSet(); // Fields the app typed a password or OTP into.
 
@@ -48,8 +49,22 @@
     return fail("not_visible", selector);
   }
 
-  function textOf(el) {
-    return String(el.innerText || el.textContent || "").replace(/\s+/g, " ").trim().slice(0, MAX_TEXT);
+  function textOf(el, limit) {
+    return String(el.innerText || el.textContent || "").replace(/\s+/g, " ").trim().slice(0, limit || MAX_TEXT);
+  }
+
+  // Attributes an extraction may read: links, sources, dates, labels and data-*; never values or tokens.
+  var READABLE = /^(href|src|datetime|title|alt|aria-label|data-[a-z0-9-]+)$/;
+  // Query parameters that may carry a sign-in or reset token are dropped from extracted links.
+  var SENSITIVE_PARAM = /token|sig|auth|session|secret|key|code|pass|otp/i;
+
+  function scrubbed(url) {
+    try {
+      var u = new URL(url, location.href);
+      u.hash = "";
+      Array.from(u.searchParams.keys()).forEach(function (k) { if (SENSITIVE_PARAM.test(k)) u.searchParams.delete(k); });
+      return u.href;
+    } catch (e) { return null; }
   }
 
   // A password or OTP field, even one a "show password" toggle turned into plain text.
@@ -101,9 +116,11 @@
     query: function (c) {
       var all = find(c.selector);
       var el = all[0];
+      var anyVisible = false;
+      for (var v = 0; v < all.length && !anyVisible; v++) anyVisible = isVisible(all[v]);
       return {
         count: all.length,
-        visible: !!el && isVisible(el),
+        visible: anyVisible,
         text: el ? textOf(el) : null,
         value: el ? valueOf(el) : null
       };
@@ -167,6 +184,30 @@
           setTimeout(poll, 100);
         })();
       });
+    },
+
+    extract: function (c) {
+      function read(scope) {
+        var out = {};
+        for (var name in c.fields) {
+          if (!Object.prototype.hasOwnProperty.call(c.fields, name)) continue;
+          var spec = c.fields[name];
+          var el;
+          try { el = spec.selector ? scope.querySelector(spec.selector) : scope; } catch (e) { fail("bad_command", "selector"); }
+          var attr = spec.attribute;
+          if (!el || el.nodeType !== 1 || isSecret(el) || (attr && !READABLE.test(attr))) { out[name] = null; continue; }
+          var value = !attr ? textOf(el, MAX_EXTRACT)
+            : (attr === "href" || attr === "src") ? (el.getAttribute(attr) === null ? null : scrubbed(el.getAttribute(attr)))
+            : el.getAttribute(attr);
+          out[name] = value === null ? null : String(value).slice(0, MAX_EXTRACT);
+        }
+        return out;
+      }
+      if (!c.items) return read(document);
+      var all = find(c.items);
+      var rows = [];
+      for (var i = 0; i < all.length && rows.length < c.max; i++) rows.push(read(all[i]));
+      return rows;
     },
 
     snapshot: function () {

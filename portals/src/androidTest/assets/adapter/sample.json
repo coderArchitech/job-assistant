@@ -1,0 +1,70 @@
+{
+  "kind": "adapter",
+  "name": "sample",
+  "version": 1,
+  "minAppVersion": 1,
+  "origins": ["https://portal.example"],
+  "urls": {
+    "login": "https://portal.example/assets/adapter/login.html",
+    "search": "https://portal.example/assets/adapter/search.html?q={query}",
+    "health": "https://portal.example/assets/adapter/home.html"
+  },
+  "selectors": {
+    "loggedIn": "#account",
+    "username": "#user",
+    "password": "#pass",
+    "signIn": "#signin",
+    "otp": "#otp",
+    "loginError": ".login-error",
+    "searchBox": "#search",
+    "applyButton": "#apply",
+    "name": "#name",
+    "email": "#email",
+    "notice": "#notice",
+    "cv": "#cv",
+    "send": "#send",
+    "thanks": "#thanks",
+    "applied": ".applied-badge"
+  },
+  "login": {
+    "steps": [
+      {"do": "type", "selector": "username", "value": "username"},
+      {"do": "type", "selector": "password", "value": "password"},
+      {"do": "click", "selector": "signIn"}
+    ],
+    "loggedIn": "loggedIn",
+    "otp": "otp",
+    "badCredentials": "loginError"
+  },
+  "search": {
+    "items": ".job",
+    "fields": {
+      "id": {"selector": "", "attribute": "data-id"},
+      "title": {"selector": ".title"},
+      "company": {"selector": ".company"},
+      "location": {"selector": ".location"},
+      "url": {"selector": "a", "attribute": "href"}
+    }
+  },
+  "details": {
+    "fields": {
+      "title": {"selector": "h1"},
+      "company": {"selector": ".company"},
+      "location": {"selector": ".location"},
+      "description": {"selector": "#jd"}
+    }
+  },
+  "apply": {
+    "open": [{"do": "click", "selector": "applyButton"}],
+    "fields": {
+      "name": {"selector": "name", "required": true},
+      "email": {"selector": "email", "required": true},
+      "notice": {"selector": "notice", "kind": "select"}
+    },
+    "resume": "cv",
+    "submit": "send",
+    "confirmation": "thanks",
+    "alreadyApplied": "applied"
+  },
+  "health": {"selectors": ["loggedIn", "searchBox"]}
+}

@@ -83,6 +83,24 @@ internal class BridgeProtocol(
                     put("selector", command.selector)
                     put("timeoutMs", command.timeoutMs)
                 }
+                is BridgeCommand.Extract -> {
+                    command.items?.let { put("items", it) }
+                    put(
+                        "fields",
+                        buildJsonObject {
+                            command.fields.forEach { (name, field) ->
+                                put(
+                                    name,
+                                    buildJsonObject {
+                                        put("selector", field.selector)
+                                        field.attribute?.let { put("attribute", it) }
+                                    },
+                                )
+                            }
+                        },
+                    )
+                    put("max", BridgeCommand.MAX_ITEMS)
+                }
                 BridgeCommand.Snapshot -> Unit
             }
         }.toString()
