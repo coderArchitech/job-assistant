@@ -71,7 +71,7 @@ Needs JDK 21 and the Android SDK (`ANDROID_HOME`, or `sdk.dir` in an untracked `
 ./gradlew deviceTest                      # instrumented tests in every module (needs an emulator or device)
 ```
 
-`unitTest`, `staticChecks` and `deviceTest` are aggregate tasks registered by the convention plugins in `build-logic/`, so they cover a new module automatically. Playwright tests for the portal adapters (`npm --prefix portals/scripts test`) arrive with the adapter framework in task T3.11; until then that command does not exist.
+`unitTest`, `staticChecks` and `deviceTest` are aggregate tasks registered by the convention plugins in `build-logic/`, so they cover a new module automatically. Adapters are declarative manifests with no JavaScript of their own (T3.11), so the Playwright tests (`npm --prefix portals/scripts test`) cover the bridge script, `bridge.js`, against saved portal pages; they arrive with the adapter test harness in task T3.12, and until then that command does not exist.
 
 Build variants: flavors `dev` (package suffix `.dev`, so it installs next to prod) and `prod`, each with `debug` and `release` (R8 shrinking). The config host URL per flavor is set in `gradle.properties` and is empty until task T3.10.
 

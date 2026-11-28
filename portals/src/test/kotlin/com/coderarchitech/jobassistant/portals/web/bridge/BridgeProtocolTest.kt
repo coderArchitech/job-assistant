@@ -77,6 +77,35 @@ class BridgeProtocolTest {
         assertEquals("2500", wait["timeoutMs"]?.jsonPrimitive?.content)
 
         assertEquals("snapshot", decodeJson(protocol.encode(4, BridgeCommand.Snapshot)).text("cmd"))
+
+        val extract =
+            decodeJson(
+                protocol.encode(
+                    6,
+                    BridgeCommand.Extract(
+                        mapOf("id" to BridgeCommand.Field("", "data-id"), "title" to BridgeCommand.Field(".title")),
+                        items = ".job",
+                    ),
+                ),
+            )
+        assertEquals(".job", extract.text("items"))
+        assertEquals(
+            "data-id",
+            extract["fields"]
+                ?.jsonObject
+                ?.get("id")
+                ?.jsonObject
+                ?.text("attribute"),
+        )
+        assertEquals(
+            null,
+            extract["fields"]
+                ?.jsonObject
+                ?.get("title")
+                ?.jsonObject
+                ?.get("attribute"),
+        )
+        assertEquals("${BridgeCommand.MAX_ITEMS}", extract["max"]?.jsonPrimitive?.content)
     }
 
     @Test

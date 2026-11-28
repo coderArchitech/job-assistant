@@ -349,7 +349,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
 
 ### Portal adapters
 
-- [ ] **T3.11 Build the adapter framework** (P0) · Depends on T3.07, T3.09
+- [x] **T3.11 Build the adapter framework** (P0) · Depends on T3.07, T3.09 · [#50](https://github.com/coderArchitech/job-assistant/pull/50)
   _Note from T3.09:_ Load bundles with `ConfigClient.current(ConfigItem.Adapter(name), isValidBody)` and refresh them with `refresh(...)`, passing a validator for the manifest, so a saved bundle this app cannot read never wins over the bundled one. Bundled adapters go in `assets/config/v1/adapters/`.
   _Note from T3.07:_ Drive pages through `JsBridge` (`:portals`, `web.bridge`): `attach` it before the first load, and after a step that navigates, call `awaitPage(newerThan = generation)` with the generation read before the step. `PageChanged` and `NoReply` mean the step's outcome is unknown; never retry a submit on them (rule 5). Adapter bundles are injected the same way, for the portal's origins only.
   _Note from T3.08:_ call `PortalSessions.attach(webView, portal)` on each `AgentWebView` before its first load, and build `PortalSessions` with every portal so a fallback wipe spares their domains.
@@ -357,12 +357,14 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ a sample adapter passes the adapter test harness (T3.12).
 
 - [ ] **T3.12 Build the adapter test harness** (P0) · Depends on T3.11
+  _Note from T3.11:_ `SampleAdapterTest` (instrumented) already drives `assets/adapter/sample.json` against saved pages on `https://portal.example`; build the harness out from it (fill order, page classification, a broken selector failing CI). Adapters are declarative manifests, so the Playwright tests CLAUDE.md asks for cover `bridge.js` (its `query`, `extract` and secret rules) against the same snapshots.
   _Note from T3.07:_ `JsBridgeTest` already serves pages on made-up origins with one `WebViewAssetLoader` per host; reuse that, with `Pacer.NONE`.
   _Note from T3.06:_ `AgentWebView` takes a `RequestInterceptor`; `AgentWebViewTest` already serves pages from the test APK through `WebViewAssetLoader` on `appassets.androidplatform.net`, which the harness can reuse.
   Saved HTML snapshots served through `WebViewAssetLoader` in instrumented tests; assertions on selectors, fill order and page classification.
   _Done when:_ a broken selector fails the harness in CI.
 
 - [ ] **T3.13 Build the Naukri adapter** (P0) · Depends on T3.11, T3.12
+  _Note from T3.11:_ An adapter is a manifest (`AdapterManifest`, the design's "Adapter framework"), bundled as `core/config/src/main/assets/config/v1/adapters/<portal>.json` and published signed on the config host; same for T3.14 and T3.15.
   Login, search, job details, direct apply with questionnaire, health check.
   _Done when:_ an end-to-end apply on a test account completes in stop-before-submit mode.
 
@@ -375,12 +377,14 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ a Greenhouse form is filled end to end on a test posting (BR1).
 
 - [ ] **T3.16 Detect CAPTCHAs and redirects** (P0) · Depends on T3.11
+  _Note from T3.11:_ `PageSteps.KNOWN_CHALLENGES` lists the challenge frames checked on every page (reCAPTCHA checkbox and challenge, hCaptcha, Cloudflare, Arkose, not the invisible reCAPTCHA v3 badge), and a manifest adds its own under `captcha`. Redirects to unsupported ATSs are not detected yet.
   Recognize challenge iframes and pages and hand the page to the user (never solve them). Detect Workday and other unsupported redirects and move the job to "Apply manually" with answers ready to copy.
   _Done when:_ saved challenge and redirect pages are classified correctly in the harness.
 
 ### Login and OTP
 
 - [ ] **T3.17 Implement portal login** (P0) · Depends on T3.08, T1.07
+  _Note from T3.11:_ `ScriptedPortalAdapter.login()` already checks the logged-in marker before asking its `CredentialSource`; implement that source over the vault (`portal/<id>`), and handle `OtpNeeded` with T3.18.
   _Note from T3.07:_ Type passwords and OTPs with `BridgeCommand.Type(..., secret = true)`, so the field never comes back in a query or snapshot.
   Check a logged-in marker first; otherwise fill credentials from the vault through the bridge. Results: `LoggedIn`, `OtpNeeded`, or `Failed` with a reason. Two bad-credential failures in a row disable the portal.
   _Note from T1.07:_ Handle `VaultRead.Unreadable` (ask the user to re-enter) differently from `VaultException` (retry later); never count either as a bad-credential login failure.
@@ -402,6 +406,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ a test cannot take an eleventh slot on one portal in a day.
 
 - [ ] **T3.21 Build the apply session** (P0) · Depends on T3.13, T3.15, T3.16, T3.18, T3.20
+  _Note from T3.11:_ Pass an `ApplyRequest.beforeSubmit` that writes `SUBMITTING` (with the attempt ID) and returns true only once it is stored; map `ApplyResult.Failed(OUTCOME_UNKNOWN)` after a submit to `CHECK_MANUALLY`, never a retry; `CAPTCHA` hands the page to the user. Highlighting Submit for the user in reviewed mode is not in the adapter yet.
   The apply flow from the design: take a cap slot, ensure a session, classify the page, fill, check for CAPTCHAs, stop before submit by default (or write `SUBMITTING`, click and confirm in auto-submit mode, which a portal allows only after 20 manual submissions, per D11), save a proof screenshot, write `SUBMITTED`. A `SUBMITTING` record left by a crash goes to "Check manually" and is never retried.
   _Note from T1.05:_ Settle a live attempt with `ApplicationRepository.markSubmitted`, `markFailed` or `markCheckManually`, passing the attempt ID. Change the application and its job in one `TransactionRunner.run { … }`, calling `requireMoved()` on each result. Call `recoverInterruptedSubmissions()` once at process start, before any session can begin. A failed application is final, so retrying a failed apply needs a new decision.
   _Note from T3.20:_ Take the slot with `CapSlots.take(portal.id, portal.dailyCap, settings.caps.overallDailyApplies)` and start no session on `Denied`. If the session ends before it reached the portal (for example the stored login was missing), call `release(slot)` once; after the portal was contacted, keep the slot used.
@@ -421,6 +426,7 @@ This file lists every task needed to build Phase 1 of the AI Job Search Agent, b
   _Done when:_ it fills a form on a test custom portal and stops at "ready for user".
 
 - [ ] **T3.25 Add adapter health checks** (P0) · Depends on T3.11, T2.20
+  _Note from T3.11:_ `PortalAdapter.healthCheck()` returns `Degraded(missing)` with the selector names that no longer match, or `Unreachable` when the page did not load (which says nothing about the selectors).
   `healthCheck()` before each run; a failure marks the adapter degraded, skips that portal, saves a screenshot and shows an alert on Home.
   _Done when:_ breaking a selector in a test bundle produces the Home alert and other portals still run.
 

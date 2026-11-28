@@ -12,7 +12,10 @@ sealed interface BridgeCommand {
     /** True for steps that act on the page; the bridge paces these like a person would. */
     val isAction: Boolean get() = false
 
-    /** How many elements match [selector], whether the first is visible, its text and (non-password) value. */
+    /**
+     * How many elements match [selector], whether any of them is visible, and the first one's text and
+     * (non-secret) value.
+     */
     data class Query(
         val selector: String,
     ) : BridgeCommand {
@@ -81,6 +84,31 @@ sealed interface BridgeCommand {
     }
 
     /**
+     * Reads named [fields] from the page (task T3.11). With [items], it reads them from each element [items]
+     * matches, up to [MAX_ITEMS], and answers a list; without, it reads them once from the document and answers
+     * one object. A field is the text of its element, or one of a few attributes (`href`, `src`, `datetime`,
+     * `title`, `alt`, `aria-label`, `data-*`); links are absolute, without a fragment or parameters that may hold a
+     * token. A field with no match, or an attribute outside that list, is null. Secrets are never read: a password
+     * or one-time-code field reads as null.
+     */
+    data class Extract(
+        val fields: Map<String, Field>,
+        val items: String? = null,
+    ) : BridgeCommand {
+        init {
+            require(fields.isNotEmpty()) { "Extract at least one field" }
+        }
+
+        override val name get() = "extract"
+    }
+
+    /** Where an [Extract] field comes from: [selector] within the item or document ("" is the item itself). */
+    data class Field(
+        val selector: String,
+        val attribute: String? = null,
+    )
+
+    /**
      * The page's form fields, buttons and links with a selector for each, password values shown as
      * `{{password}}` (design, generic browser agent).
      */
@@ -92,6 +120,9 @@ sealed interface BridgeCommand {
     companion object {
         const val DEFAULT_WAIT_MS = 10_000L
         const val MAX_WAIT_MS = 60_000L
+
+        /** The most items one [Extract] reads. */
+        const val MAX_ITEMS = 200
     }
 }
 
