@@ -144,7 +144,8 @@ class SampleAdapterTest {
         runBlocking {
             assertEquals(ApplyResult.ReadyForUser, adapter.apply(request(ApplyMode.REVIEWED)))
 
-            assertEquals("null", script("JSON.stringify(window.sent || null)"))
+            // Nothing was sent: the page records a submission in window.sent.
+            assertEquals("true", script("window.sent === undefined"))
         }
 
     @Test
